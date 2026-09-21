@@ -1,0 +1,2568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>C 盘清理大师</title>
+    <script src="echarts.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0c10; --panel: #14171f; --panel-2: #1a1e28; --text: #e6e9ef;
+            --accent: #4f7cff; --accent-2: #6b90ff; --danger: #e5484d; --muted: #8b93a7;
+            --success: #22c55e; --warning: #f59e0b;
+            --border: #232833;
+            --shadow: rgba(0,0,0,0.4);
+        }
+        body.light {
+            --bg: #f5f7fa; --panel: #ffffff; --panel-2: #f0f2f5; --text: #1a1d23;
+            --accent: #3b6ef5; --accent-2: #5580ff; --danger: #d93b40; --muted: #6b7280;
+            --success: #16a34a; --warning: #d97706;
+            --border: #e0e4ea;
+            --shadow: rgba(0,0,0,0.08);
+        }
+        * { box-sizing: border-box; }
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 0; margin: 0; overflow-x: hidden;
+            transition: background 0.3s, color 0.3s;
+            background-image:
+                radial-gradient(circle at 20% 0%, rgba(79,124,255,0.08), transparent 40%),
+                radial-gradient(circle at 80% 100%, rgba(107,144,255,0.05), transparent 40%);
+            min-height: 100vh;
+        }
+        .splash {
+            position: fixed; inset: 0;
+            background: radial-gradient(circle at 50% 50%, #1a1e28, #0a0c10);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.7s ease, visibility 0.7s;
+        }
+        .splash.hide { opacity: 0; visibility: hidden; }
+        .splash-logo-wrap { position: relative; width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; }
+        .splash-logo {
+            font-size: 60px;
+            animation: splashPop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+            filter: drop-shadow(0 8px 32px rgba(79,124,255,0.6));
+            position: relative; z-index: 2;
+        }
+        .splash-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(79,124,255,0.5); animation: splashRing 1.6s ease-out infinite; }
+        .splash-ring.delay { animation-delay: 0.8s; }
+        @keyframes splashRing { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+        @keyframes splashPop {
+            0% { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+            60% { transform: scale(1.15) rotate(5deg); }
+            100% { transform: scale(1) rotate(0); opacity: 1; }
+        }
+        .splash-title {
+            font-size: 22px; font-weight: 600; margin-top: 28px; letter-spacing: 3px;
+            background: linear-gradient(135deg, #ffffff, #a8b8ff);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            animation: splashText 0.7s 0.35s ease both;
+        }
+        .splash-sub { font-size: 12px; color: #8b93a7; margin-top: 12px; letter-spacing: 2px; animation: splashText 0.7s 0.55s ease both; }
+        .splash-sub::after { content: ''; display: inline-block; animation: dots 1.4s steps(4) infinite; }
+        @keyframes dots { 0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80%, 100% { content: '...'; } }
+        @keyframes splashText { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        .container { max-width: 900px; margin: 0 auto; padding: 24px 30px 60px; }
+        .app-header {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            padding: 10px 0 20px; position: relative;
+            animation: slideDown 0.6s 0.1s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .app-logo {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, #4f7cff, #6b90ff);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 16px rgba(79,124,255,0.4);
+        }
+        .app-title {
+            font-size: 20px; font-weight: 600; letter-spacing: 0.5px;
+            background: linear-gradient(135deg, var(--text), var(--accent-2));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .header-actions {
+            position: absolute; right: 0; top: 10px;
+            display: flex; gap: 8px;
+        }
+        .icon-btn {
+            width: 36px; height: 36px; border-radius: 10px;
+            background: var(--panel); border: 1px solid var(--border);
+            color: var(--text); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; transition: all 0.2s;
+        }
+        .icon-btn:hover { background: var(--panel-2); transform: translateY(-1px); }
+        .tabs {
+            display: flex; justify-content: center; gap: 6px; margin-bottom: 24px;
+            background: var(--panel); padding: 5px; border-radius: 12px;
+            border: 1px solid var(--border);
+            max-width: 920px; margin-left: auto; margin-right: auto;
+            animation: slideDown 0.6s 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+            flex-wrap: wrap;
+        }
+        .tab {
+            flex: 1; min-width: 75px; padding: 10px 10px; border-radius: 8px; cursor: pointer;
+            color: var(--muted); font-size: 12.5px; text-align: center;
+            transition: all 0.25s; border: none; background: transparent;
+            font-family: inherit;
+        }
+        .tab.active {
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            color: white; box-shadow: 0 4px 14px rgba(79,124,255,0.35);
+            font-weight: 500;
+        }
+        .tab:hover:not(.active) { color: var(--text); background: rgba(79,124,255,0.08); }
+        .page { display: none; }
+        .page.active { display: block; animation: pageIn 0.55s 0.3s cubic-bezier(0.4, 0, 0.2, 1) both; }
+        @keyframes pageIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
+        .hero { text-align: center; padding: 30px 20px 24px; position: relative; margin-bottom: 10px; }
+        .hero-circle {
+            width: 160px; height: 160px; margin: 0 auto 24px; position: relative;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(79,124,255,0.15) 0%, transparent 70%);
+            transition: all 0.4s;
+        }
+        .hero-circle::before {
+            content: ''; position: absolute; inset: 0; border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0%, var(--accent) 50%, transparent 100%);
+            animation: rotate 3s linear infinite; opacity: 0.6;
+            mask: radial-gradient(circle, transparent 68%, black 70%);
+            -webkit-mask: radial-gradient(circle, transparent 68%, black 70%);
+        }
+        .hero-circle::after {
+            content: ''; position: absolute; inset: 10px; border-radius: 50%;
+            background: var(--bg); border: 1px solid var(--border);
+        }
+        .hero-circle.idle::before { animation: none; opacity: 0; }
+        .hero-circle.idle::after { inset: 0; background: radial-gradient(circle, var(--panel-2) 0%, var(--panel) 100%); }
+        .hero-circle.scanning::before { opacity: 1; }
+        .hero-circle.idle { animation: heroBreath 3.5s ease-in-out infinite; }
+        @keyframes heroBreath {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(79,124,255,0)); }
+            50% { transform: scale(1.03); filter: drop-shadow(0 0 24px rgba(79,124,255,0.35)); }
+        }
+        .hero-circle.scanning { animation: heroScanPulse 1.2s ease-in-out infinite; }
+        @keyframes heroScanPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+        @keyframes rotate { to { transform: rotate(360deg); } }
+        .hero-value {
+            position: relative; z-index: 2; font-size: 30px; font-weight: 700;
+            background: linear-gradient(135deg, var(--text), var(--accent-2));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            letter-spacing: -0.5px;
+            animation: valueIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        @keyframes valueIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+        .hero-unit { font-size: 14px; color: var(--muted); margin-top: 6px; position: relative; z-index: 2; }
+        .hero-icon {
+            font-size: 46px; position: relative; z-index: 2;
+            filter: drop-shadow(0 4px 12px rgba(79,124,255,0.5));
+        }
+        .hero-title { font-size: 18px; color: var(--text); margin-bottom: 6px; font-weight: 500; transition: all 0.3s; }
+        .hero-subtitle { font-size: 13px; color: var(--muted); line-height: 1.6; }
+        .progress-bar {
+            height: 34px; background: var(--panel); border-radius: 8px;
+            padding: 7px 16px; font-size: 12px; color: var(--muted);
+            line-height: 20px; margin-bottom: 16px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            display: none; border: 1px solid var(--border); position: relative;
+        }
+        .progress-bar.active { display: block; }
+        .progress-bar::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 30%;
+            background: linear-gradient(90deg, transparent, rgba(79,124,255,0.15), transparent);
+            animation: shimmer 1.6s infinite;
+        }
+        @keyframes shimmer { to { transform: translateX(500%); } }
+        .clean-list { margin-bottom: 8px; }
+        .item-card {
+            background: linear-gradient(180deg, var(--panel-2), var(--panel));
+            border: 1px solid var(--border); border-radius: 12px;
+            padding: 16px 20px; margin-bottom: 8px;
+            display: flex; align-items: center; justify-content: space-between;
+            transition: all 0.3s; position: relative; overflow: hidden;
+            animation: cardIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        @keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        .item-card.cleaning {
+            animation: cardSuck 0.7s cubic-bezier(0.55, 0, 0.85, 0.3) forwards;
+            pointer-events: none;
+        }
+        @keyframes cardSuck {
+            0% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
+            60% { opacity: 0.6; transform: translateX(60px) scale(0.9); filter: blur(1px); }
+            100% { opacity: 0; transform: translateX(220px) scale(0.3); filter: blur(4px); }
+        }
+        .item-card::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+            width: 3px; background: linear-gradient(180deg, var(--accent), var(--accent-2));
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .item-card:hover { border-color: rgba(79,124,255,0.4); transform: translateX(2px); }
+        .item-card:hover::before { opacity: 1; }
+        .item-card.checked::before { opacity: 1; }
+        .item-card.done { opacity: 0.6; }
+        .item-card.done::before { background: var(--success); }
+        .item-left { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+        .item-checkbox { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+        .item-info { flex: 1; min-width: 0; }
+        .item-name { font-size: 14px; color: var(--text); margin-bottom: 4px; font-weight: 500; }
+        .item-meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+        .item-size {
+            font-size: 16px; font-weight: 700; white-space: nowrap;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            transition: all 0.3s;
+        }
+        .item-size.done { background: none; -webkit-text-fill-color: var(--success); }
+        .item-size.zero { background: none; -webkit-text-fill-color: var(--muted); font-size: 13px; font-weight: 500; }
+        .badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; display: inline-block; font-weight: 500; }
+        .badge.danger { background: rgba(229,72,77,0.15); color: #ff6b70; border: 1px solid rgba(229,72,77,0.35); }
+        .badge.warning { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.35); }
+        .badge.safe { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
+        .badge.unknown { background: rgba(139,147,167,0.15); color: #8b93a7; border: 1px solid rgba(139,147,167,0.3); }
+        .btn-group { display: flex; gap: 12px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
+        button.main-btn {
+            padding: 13px 34px; color: white; border: none; border-radius: 10px;
+            font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.25s;
+            font-family: inherit; letter-spacing: 0.3px;
+            position: relative; overflow: hidden;
+        }
+        button.main-btn::after {
+            content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+            transition: left 0.7s;
+        }
+        button.main-btn:hover:not(:disabled)::after { left: 150%; }
+        button.main-btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+        button.main-btn:active:not(:disabled) { transform: translateY(0); }
+        button.main-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        #scanBtn, #largeScanBtn, #diskScanBtn, #chatScanBtn, #dupScanBtn, #emptyScanBtn, #residueScanBtn {
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            box-shadow: 0 4px 16px rgba(79,124,255,0.35);
+        }
+        #cleanBtn, #deleteLargeBtn, #chatCleanBtn, #dupDeleteBtn, #emptyDeleteBtn, #residueDeleteBtn {
+            background: linear-gradient(135deg, #e5484d, #cc3d42);
+            box-shadow: 0 4px 16px rgba(229,72,77,0.35);
+            display: none;
+        }
+        #status { text-align: center; color: var(--muted); margin-top: 20px; min-height: 22px; font-size: 13px; }
+        .empty-state { text-align: center; padding: 50px 20px; color: var(--muted); font-size: 13px; }
+        .empty-state-icon {
+            font-size: 72px; margin-bottom: 18px;
+            display: inline-block;
+            animation: emptyFloat 3s ease-in-out infinite;
+            filter: drop-shadow(0 8px 24px rgba(79,124,255,0.3));
+        }
+        @keyframes emptyFloat {
+            0%, 100% { transform: translateY(0) rotate(-3deg); }
+            50% { transform: translateY(-8px) rotate(3deg); }
+        }
+        .empty-state-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+        .empty-state-desc { font-size: 13px; line-height: 1.7; }
+        .trash-fly {
+            position: fixed; right: 40px; bottom: 40px;
+            font-size: 56px; z-index: 5000;
+            animation: trashFly 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            pointer-events: none;
+            filter: drop-shadow(0 8px 24px rgba(229,72,77,0.5));
+        }
+        @keyframes trashFly {
+            0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+            40% { transform: scale(1.4) rotate(0deg); opacity: 1; }
+            70% { transform: scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: scale(0.3) translateY(80px); opacity: 0; }
+        }
+        .trash-count {
+            position: fixed; right: 60px; bottom: 110px;
+            font-size: 24px; font-weight: 700; z-index: 5001;
+            background: linear-gradient(135deg, #ffffff, #ffcccc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            animation: trashCountUp 1.4s ease-out forwards;
+            pointer-events: none;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        @keyframes trashCountUp {
+            0% { opacity: 0; transform: translateY(0); }
+            30% { opacity: 1; transform: translateY(-10px); }
+            100% { opacity: 0; transform: translateY(-80px); }
+        }
+        .large-item-card {
+            background: linear-gradient(180deg, var(--panel-2), var(--panel));
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 18px; margin-bottom: 8px;
+            display: flex; justify-content: space-between; align-items: center;
+            transition: all 0.2s;
+            animation: cardIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .large-item-card:hover { border-color: rgba(79,124,255,0.3); }
+        .large-item-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+        .large-file-path { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; }
+        .large-file-row { display: flex; flex-direction: column; gap: 4px; }
+        .large-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .open-btn, .kill-btn {
+            background: rgba(79,124,255,0.1); border: 1px solid rgba(79,124,255,0.3);
+            color: #8ba7ff; padding: 5px 12px; font-size: 12px; border-radius: 6px;
+            cursor: pointer; transition: all 0.2s; white-space: nowrap; font-family: inherit;
+        }
+        .open-btn:hover { background: var(--accent); border-color: var(--accent); color: white; }
+        .kill-btn { background: rgba(229,72,77,0.1); border-color: rgba(229,72,77,0.3); color: #ff6b70; }
+        .kill-btn:hover { background: #e5484d; color: white; }
+        .setting-section {
+            background: linear-gradient(180deg, var(--panel-2), var(--panel));
+            border: 1px solid var(--border); border-radius: 14px;
+            padding: 24px 28px; margin-bottom: 16px;
+            box-shadow: 0 4px 20px var(--shadow);
+        }
+        .setting-section h3 {
+            margin: 0 0 16px 0; color: var(--text); font-size: 15px;
+            letter-spacing: 0.3px; padding-bottom: 14px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .section-desc { color: var(--muted); font-size: 13px; margin-bottom: 14px; line-height: 1.6; }
+        .setting-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; padding: 14px 16px;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 10px; margin-bottom: 8px; transition: all 0.2s;
+        }
+        .setting-row:hover { background: var(--panel-2); }
+        .row-label { color: var(--text); font-size: 14px; flex: 1; }
+        .row-hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+        .row-control { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .setting-row select, .setting-row input[type="text"] {
+            background: var(--bg); border: 1px solid var(--border); color: var(--text);
+            padding: 8px 14px; border-radius: 6px; font-size: 14px;
+            cursor: pointer; transition: border-color 0.2s; outline: none; font-family: inherit;
+        }
+        .setting-row select:hover { border-color: var(--accent); }
+        .setting-row select:focus, .setting-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,124,255,0.15); }
+        .time-badge {
+            display: inline-block; background: rgba(79,124,255,0.12);
+            color: #8ba7ff; font-size: 12px; padding: 5px 12px;
+            border-radius: 6px; margin-top: 8px;
+            border: 1px solid rgba(79,124,255,0.25);
+        }
+        .switch { position: relative; display: inline-block; width: 52px; height: 28px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background: #2a2f3a;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 28px; border: 1px solid #333a47;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+        }
+        body.light .switch .slider { background: #d0d5dd; border-color: #b0b5bd; }
+        .switch .slider:before {
+            content: ""; position: absolute;
+            height: 20px; width: 20px; left: 3px; top: 3px;
+            background: linear-gradient(180deg, #ffffff, #d0d5dd);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+        .switch input:checked + .slider {
+            background: linear-gradient(135deg, #4f7cff, #6b90ff);
+            border-color: #5a85ff;
+            box-shadow: 0 0 12px rgba(79,124,255,0.4), inset 0 1px 2px rgba(255,255,255,0.1);
+        }
+        .switch input:checked + .slider:before { transform: translateX(24px); background: linear-gradient(180deg, #ffffff, #e8ecf5); }
+        .whitelist-tag {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: linear-gradient(180deg, #262b36, #1e222b);
+            border: 1px solid #333a47; border-radius: 6px;
+            padding: 6px 12px; font-size: 13px; margin: 4px 6px 4px 0;
+        }
+        body.light .whitelist-tag { background: linear-gradient(180deg, #e8ecf5, #dde2eb); border-color: #c5cad4; }
+        .whitelist-tag .friendly { color: var(--text); }
+        .whitelist-tag .raw { color: var(--muted); font-size: 11px; }
+        .whitelist-tag span.close { color: var(--danger); cursor: pointer; font-weight: bold; margin-left: 4px; }
+        .whitelist-tag span.close:hover { color: #ff8888; }
+        .proc-search-input {
+            width: 100%; margin-bottom: 8px;
+            background: var(--bg); border: 1px solid var(--border);
+            color: var(--text); padding: 10px 14px; border-radius: 8px;
+            font-size: 14px; outline: none; transition: all 0.2s; font-family: inherit;
+        }
+        .proc-search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,124,255,0.15); }
+        .proc-picker { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; max-height: 280px; overflow-y: auto; margin-top: 10px; }
+        .proc-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+        .proc-item:last-child { border-bottom: none; }
+        .proc-item:hover { background: var(--panel-2); }
+        .proc-item.selected { background: rgba(79,124,255,0.12); }
+        .proc-item .p-name { font-size: 13px; }
+        .proc-item .p-raw { font-size: 11px; color: var(--muted); margin-top: 2px; }
+        .proc-item .p-system { font-size: 10px; color: var(--warning); margin-left: 6px; }
+        .proc-item .p-status { font-size: 12px; color: var(--muted); }
+        .proc-item.selected .p-status { color: var(--accent); }
+        .info-list { display: flex; flex-direction: column; gap: 10px; }
+        .info-item {
+            background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 18px; display: flex; justify-content: space-between;
+            align-items: center; gap: 20px; transition: all 0.2s;
+        }
+        .info-item:hover { background: var(--panel-2); }
+        .info-item .info-label { color: var(--muted); font-size: 13px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+        .info-item .info-value { color: var(--text); font-size: 13px; font-weight: 500; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+        .bar-row { display: flex; align-items: center; gap: 14px; width: 100%; }
+        .bar-track { flex: 1; height: 10px; background: var(--panel-2); border-radius: 5px; overflow: hidden; position: relative; box-shadow: inset 0 1px 2px rgba(0,0,0,0.2); }
+        .bar-fill {
+            height: 100%; border-radius: 5px;
+            background: linear-gradient(90deg, #4f7cff, #6b90ff);
+            box-shadow: 0 0 10px rgba(79,124,255,0.5);
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative; overflow: hidden; min-width: 0;
+        }
+        .bar-fill::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: barShine 2s infinite;
+        }
+        @keyframes barShine { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .bar-fill.warn { background: linear-gradient(90deg, #f59e0b, #fbbf24); box-shadow: 0 0 10px rgba(245,158,11,0.5); }
+        .bar-fill.danger { background: linear-gradient(90deg, #e5484d, #ff6b70); box-shadow: 0 0 10px rgba(229,72,77,0.5); }
+        .bar-text { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 100px; text-align: right; }
+        .bar-text .pct { background: linear-gradient(135deg, var(--text), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .bar-text .sub { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+        .stat-row { display: flex; gap: 10px; margin-bottom: 14px; }
+        .stat-box { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 10px; text-align: center; }
+        .stat-value { font-size: 20px; font-weight: 700; background: linear-gradient(135deg, var(--text), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+        .history-list { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; max-height: 240px; overflow-y: auto; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+        .history-item:last-child { border-bottom: none; }
+        .history-item .h-time { color: var(--muted); }
+        .history-item .h-freed { color: var(--accent); font-weight: 600; }
+        .shutdown-display {
+            padding: 22px; text-align: center;
+            background: var(--panel-2);
+            border-radius: 12px; border: 1px solid var(--border);
+            margin-top: 12px;
+            animation: modalIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        .shutdown-countdown { font-size: 40px; font-weight: 700; background: linear-gradient(135deg, #f59e0b, #fbbf24); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-variant-numeric: tabular-nums; letter-spacing: 2px; }
+        .shutdown-label { color: var(--muted); font-size: 12px; margin-top: 6px; letter-spacing: 1px; }
+        .disk-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+        .disk-breadcrumb {
+            flex: 1; display: flex; align-items: center; gap: 6px;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 8px; padding: 9px 14px;
+            font-size: 12px; color: var(--muted);
+            overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+            min-height: 38px;
+        }
+        .disk-breadcrumb .crumb { color: #8ba7ff; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.15s; }
+        .disk-breadcrumb .crumb:hover { background: rgba(79,124,255,0.15); }
+        .disk-breadcrumb .sep { color: var(--muted); }
+        #diskChart { width: 100%; height: 520px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .disk-stats { display: flex; gap: 10px; margin-top: 14px; }
+        .disk-stat-card { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; text-align: center; }
+        .disk-stat-card .num { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, var(--text), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .disk-stat-card .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+        .chat-account-card { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; margin-bottom: 14px; animation: cardIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) both; }
+        .chat-account-header { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+        .chat-account-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 14px rgba(79,124,255,0.3); }
+        .chat-account-icon.wechat { background: linear-gradient(135deg, #07c160, #06ad56); }
+        .chat-account-icon.qq { background: linear-gradient(135deg, #12b7f5, #0a9ad8); }
+        .chat-account-info { flex: 1; min-width: 0; }
+        .chat-account-name { font-size: 14px; font-weight: 600; }
+        .chat-account-path { font-size: 11px; color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chat-account-total { font-size: 16px; font-weight: 700; color: var(--accent); }
+        .chat-category-list { display: flex; flex-direction: column; gap: 8px; }
+        .chat-category { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; transition: all 0.2s; }
+        .chat-category:hover { background: var(--panel); }
+        .chat-category input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+        .chat-category .cc-icon { font-size: 20px; }
+        .chat-category .cc-info { flex: 1; min-width: 0; }
+        .chat-category .cc-label { font-size: 13px; font-weight: 500; }
+        .chat-category .cc-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+        .chat-category .cc-size { font-size: 14px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+        .time-filter { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+        .time-filter label { color: var(--muted); font-size: 13px; }
+        .time-filter select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: 6px; font-size: 13px; outline: none; font-family: inherit; cursor: pointer; }
+        .time-filter select:focus { border-color: var(--accent); }
+        .sub-tabs { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; padding: 4px; background: var(--panel); border-radius: 10px; border: 1px solid var(--border); max-width: 540px; margin-left: auto; margin-right: auto; }
+        .sub-tab { flex: 1; padding: 9px 14px; border-radius: 7px; cursor: pointer; color: var(--muted); font-size: 13px; text-align: center; transition: all 0.2s; border: none; background: transparent; font-family: inherit; }
+        .sub-tab.active { background: var(--accent); color: white; font-weight: 500; }
+        .sub-tab:hover:not(.active) { background: rgba(79,124,255,0.1); color: var(--text); }
+        .path-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; flex-wrap: wrap; }
+        .path-bar label { color: var(--muted); font-size: 13px; }
+        .path-bar input { flex: 1; min-width: 200px; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 9px 14px; border-radius: 8px; font-size: 13px; outline: none; transition: all 0.2s; font-family: inherit; }
+        .path-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,124,255,0.15); }
+        .dup-group { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-bottom: 12px; animation: cardIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) both; }
+        .dup-group-header { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+        .dup-group-header .dg-icon { font-size: 20px; }
+        .dup-group-header .dg-info { flex: 1; }
+        .dup-group-header .dg-title { font-size: 13px; font-weight: 600; }
+        .dup-group-header .dg-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+        .dup-group-header .dg-waste { font-size: 14px; font-weight: 700; color: #ff6b70; white-space: nowrap; }
+        .dup-file { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-size: 12px; transition: all 0.15s; }
+        .dup-file:hover { border-color: var(--accent); }
+        .dup-file.keep { border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.05); }
+        .dup-file input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--danger); cursor: pointer; }
+        .dup-file .df-path { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dup-file .df-keep { color: #4ade80; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); }
+        .empty-folder-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-size: 12px; transition: all 0.15s; }
+        .empty-folder-item:hover { border-color: var(--accent); background: var(--panel-2); }
+        .empty-folder-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+        .empty-folder-item .ef-path { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .scan-progress-info { padding: 14px 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 12px; color: var(--muted); }
+        .scan-progress-info .spi-row { margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .scan-progress-info .spi-bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+        .scan-progress-info .spi-bar-fill { height: 100%; background: linear-gradient(90deg, #4f7cff, #6b90ff); border-radius: 3px; transition: width 0.3s; }
+
+        /* ============ 粉碎机专用 ============ */
+        .shred-warning {
+            padding: 18px 22px;
+            background: linear-gradient(180deg, rgba(229,72,77,0.15), rgba(229,72,77,0.08));
+            border: 1px solid rgba(229,72,77,0.5);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            animation: warningPulse 2s ease-in-out infinite;
+        }
+        @keyframes warningPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(229,72,77,0); }
+            50% { box-shadow: 0 0 24px 0 rgba(229,72,77,0.3); }
+        }
+        .shred-warning-title {
+            color: #ff6b70; font-size: 15px; font-weight: 700;
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 8px;
+        }
+        .shred-warning-desc {
+            color: var(--text); font-size: 13px; line-height: 1.7;
+        }
+        .shred-warning-desc b { color: #ff6b70; }
+
+        .shred-dropzone {
+            padding: 40px 20px;
+            background: var(--panel);
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 16px;
+            transition: all 0.2s;
+        }
+        .shred-dropzone-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+        .shred-dropzone-title {
+            color: var(--text); font-size: 15px; font-weight: 600; margin-bottom: 6px;
+        }
+        .shred-dropzone-desc {
+            color: var(--muted); font-size: 12px; margin-bottom: 16px;
+        }
+        .shred-dropzone-btns {
+            display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+        }
+
+        .shred-list {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .shred-list-header {
+            padding: 12px 18px;
+            background: var(--panel-2);
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .shred-list-body {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .shred-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 18px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+        .shred-item:last-child { border-bottom: none; }
+        .shred-item .si-icon { font-size: 16px; flex-shrink: 0; }
+        .shred-item .si-name {
+            color: var(--text); font-weight: 500;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            min-width: 0; flex: 1;
+        }
+        .shred-item .si-path {
+            color: var(--muted); font-size: 11px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            max-width: 300px;
+        }
+        .shred-item .si-size {
+            color: var(--accent); font-weight: 700; font-size: 13px;
+            white-space: nowrap;
+        }
+        .shred-item .si-remove {
+            color: var(--danger); cursor: pointer; font-weight: bold;
+            font-size: 16px; padding: 2px 6px; border-radius: 4px;
+            flex-shrink: 0;
+            transition: background 0.15s;
+        }
+        .shred-item .si-remove:hover { background: rgba(229,72,77,0.15); }
+
+        .shred-progress {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .shred-progress.active { display: block; }
+        .shred-progress-title {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .shred-progress-flame {
+            font-size: 26px;
+            display: inline-block;
+            animation: flameShake 0.6s ease-in-out infinite;
+        }
+        @keyframes flameShake {
+            0%, 100% { transform: rotate(-8deg) scale(1); }
+            50% { transform: rotate(8deg) scale(1.15); }
+        }
+        .shred-progress-text {
+            font-size: 14px; font-weight: 600; color: #ff6b70;
+        }
+        .shred-progress-file {
+            font-size: 12px; color: var(--muted);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            margin-bottom: 10px;
+        }
+        .shred-progress-bar-track {
+            height: 10px;
+            background: var(--panel-2);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .shred-progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e5484d, #ff6b70, #f59e0b);
+            border-radius: 5px;
+            transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .shred-progress-bar-fill::after {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: barShine 1.2s infinite;
+        }
+        .shred-progress-info {
+            display: flex; justify-content: space-between;
+            font-size: 12px; color: var(--muted);
+            font-variant-numeric: tabular-nums;
+        }
+        .shred-progress-info .spi-pct {
+            font-size: 16px; font-weight: 700; color: #ff6b70;
+        }
+
+        .shred-settings {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 18px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .shred-settings label {
+            color: var(--muted); font-size: 13px;
+        }
+        .shred-settings select {
+            background: var(--bg); border: 1px solid var(--border); color: var(--text);
+            padding: 8px 14px; border-radius: 6px; font-size: 13px;
+            outline: none; cursor: pointer; font-family: inherit;
+        }
+        .shred-settings select:focus { border-color: var(--accent); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); display: flex; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(4px); animation: fadeIn 0.25s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal-box { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border-radius: 14px; padding: 26px; width: 580px; max-width: 90%; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,0.6); max-height: 80vh; overflow-y: auto; animation: modalIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.3; }
+        input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="splash" id="splash">
+        <div class="splash-logo-wrap">
+            <div class="splash-ring"></div>
+            <div class="splash-ring delay"></div>
+            <div class="splash-logo">🧹</div>
+        </div>
+        <div class="splash-title">C 盘清理大师</div>
+        <div class="splash-sub">正在启动</div>
+    </div>
+
+    <div class="container">
+        <div class="app-header">
+            <div class="app-logo">🧹</div>
+            <div class="app-title">C 盘清理大师</div>
+            <div class="header-actions">
+                <button class="icon-btn" id="themeBtn" title="切换主题">🌙</button>
+                <button class="icon-btn" id="soundBtn" title="音效开关">🔊</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-page="cleanPage">一键清理</button>
+            <button class="tab" data-page="largePage">大文件</button>
+            <button class="tab" data-page="diskPage">磁盘地图</button>
+            <button class="tab" data-page="filesPage">文件分析</button>
+            <button class="tab" data-page="chatPage">聊天软件</button>
+            <button class="tab" data-page="shredPage">粉碎机</button>
+            <button class="tab" data-page="toolsPage">工具</button>
+            <button class="tab" data-page="settingPage">设置</button>
+        </div>
+
+        <div id="cleanPage" class="page active">
+            <div class="hero">
+                <div class="hero-circle idle" id="heroCircle">
+                    <div style="text-align: center;">
+                        <div class="hero-icon" id="heroIcon">💾</div>
+                        <div class="hero-value" id="heroValue" style="display: none;">0 B</div>
+                        <div class="hero-unit" id="heroUnit" style="display: none;">可清理</div>
+                    </div>
+                </div>
+                <div class="hero-title" id="heroTitle">点击下方开始扫描</div>
+                <div class="hero-subtitle" id="heroSubtitle">看看电脑里藏了多少垃圾</div>
+            </div>
+            <div id="scanProgress" class="progress-bar"></div>
+            <div id="cleanList" class="clean-list"></div>
+            <div class="btn-group">
+                <button id="scanBtn" class="main-btn">开始扫描</button>
+                <button id="cleanBtn" class="main-btn">立即清理</button>
+            </div>
+            <div id="status">准备就绪</div>
+        </div>
+
+        <div id="largePage" class="page">
+            <div id="largeList" class="clean-list">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🔍</div>
+                    <div class="empty-state-title">查找 C 盘大文件</div>
+                    <div class="empty-state-desc">点击下方按钮，扫描占用空间最大的文件</div>
+                    <div class="empty-state-desc" style="margin-top: 6px; font-size: 12px;">需要 1-2 分钟，请耐心等待</div>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button id="largeScanBtn" class="main-btn">开始查找大文件</button>
+                <button id="deleteLargeBtn" class="main-btn">移入回收站</button>
+            </div>
+            <div id="largeStatus" style="text-align: center; color: var(--muted); margin-top: 20px; font-size: 13px;"></div>
+        </div>
+
+        <div id="diskPage" class="page">
+            <div class="disk-toolbar">
+                <button id="diskScanBtn" class="main-btn" style="padding: 10px 22px; font-size: 14px;">🔍 扫描 C 盘</button>
+                <button id="diskOpenBtn" class="open-btn" style="padding: 9px 16px; font-size: 13px; display: none;">📂 打开当前目录</button>
+                <button id="diskUpBtn" class="open-btn" style="padding: 9px 16px; font-size: 13px; display: none;">⬆ 返回上级</button>
+                <div class="disk-breadcrumb" id="diskBreadcrumb">
+                    <span style="color: var(--muted);">尚未扫描 · 💡 提示：右键任意方块可在资源管理器中打开</span>
+                </div>
+            </div>
+            <div id="diskChart">
+                <div class="empty-state" style="padding-top: 180px;">
+                    <div class="empty-state-icon">🗺️</div>
+                    <div class="empty-state-title">磁盘空间可视化</div>
+                    <div class="empty-state-desc">点击「扫描 C 盘」开始分析</div>
+                    <div class="empty-state-desc" style="margin-top: 6px; font-size: 12px;">每个方块代表一个文件夹，面积越大占用越多</div>
+                    <div class="empty-state-desc" style="font-size: 12px;">左键点击文件夹下钻 · 右键可在资源管理器中打开</div>
+                </div>
+            </div>
+            <div class="disk-stats" id="diskStats" style="display: none;">
+                <div class="disk-stat-card"><div class="num" id="diskStatTotal">-</div><div class="lbl">当前目录总大小</div></div>
+                <div class="disk-stat-card"><div class="num" id="diskStatCount">-</div><div class="lbl">子项数量</div></div>
+                <div class="disk-stat-card"><div class="num" id="diskStatTop">-</div><div class="lbl">最大占用</div></div>
+            </div>
+            <div id="diskStatus" style="text-align: center; color: var(--muted); margin-top: 16px; font-size: 13px;"></div>
+        </div>
+
+        <div id="filesPage" class="page">
+            <div class="sub-tabs">
+                <button class="sub-tab active" data-sub="dup">🔍 重复文件</button>
+                <button class="sub-tab" data-sub="empty">📁 空文件夹</button>
+                <button class="sub-tab" data-sub="residue">🗑️ 卸载残留</button>
+            </div>
+
+            <div id="dupSub" class="sub-content">
+                <div class="path-bar">
+                    <label>扫描目录</label>
+                    <input type="text" id="dupPath" placeholder="输入路径或点击右侧选择" value="">
+                    <button class="open-btn" onclick="pickFolderFor('dupPath')" style="padding: 9px 16px; font-size: 13px;">📂 选择</button>
+                </div>
+                <div class="path-bar">
+                    <label>最小文件</label>
+                    <select id="dupMinSize" style="background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: 13px; outline: none; cursor: pointer;">
+                        <option value="1024">≥ 1 MB</option>
+                        <option value="10240" selected>≥ 10 MB</option>
+                        <option value="102400">≥ 100 MB</option>
+                        <option value="1">全部文件</option>
+                    </select>
+                    <div style="flex: 1; color: var(--muted); font-size: 12px;">💡 只比对大于此大小的文件（越大越省时间）</div>
+                </div>
+                <div id="dupProgress" style="display: none;" class="scan-progress-info">
+                    <div class="spi-row" id="dupProgressPhase">正在准备...</div>
+                    <div class="spi-row" id="dupProgressCurrent"></div>
+                    <div class="spi-bar"><div class="spi-bar-fill" id="dupProgressBar" style="width: 0%;"></div></div>
+                </div>
+                <div id="dupResults"></div>
+                <div class="btn-group">
+                    <button id="dupScanBtn" class="main-btn">开始查找重复文件</button>
+                    <button id="dupDeleteBtn" class="main-btn">移入回收站</button>
+                </div>
+                <div id="dupStatus" style="text-align: center; color: var(--muted); margin-top: 16px; font-size: 13px;"></div>
+            </div>
+
+            <div id="emptySub" class="sub-content" style="display: none;">
+                <div class="path-bar">
+                    <label>扫描目录</label>
+                    <input type="text" id="emptyPath" placeholder="输入路径或点击右侧选择" value="">
+                    <button class="open-btn" onclick="pickFolderFor('emptyPath')" style="padding: 9px 16px; font-size: 13px;">📂 选择</button>
+                </div>
+                <div id="emptyProgress" style="display: none;" class="scan-progress-info">
+                    <div class="spi-row" id="emptyProgressCurrent">正在扫描...</div>
+                    <div class="spi-row" id="emptyProgressScanned"></div>
+                </div>
+                <div id="emptyResults"></div>
+                <div class="btn-group">
+                    <button id="emptyScanBtn" class="main-btn">开始查找空文件夹</button>
+                    <button id="emptyDeleteBtn" class="main-btn">删除选中</button>
+                </div>
+                <div id="emptyStatus" style="text-align: center; color: var(--muted); margin-top: 16px; font-size: 13px;"></div>
+            </div>
+
+            <div id="residueSub" class="sub-content" style="display: none;">
+                <div style="padding: 14px 18px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px; margin-bottom: 16px; font-size: 12px; line-height: 1.7; color: var(--text);">
+                    <b style="color: #f59e0b;">⚠️ 什么是卸载残留？</b><br>
+                    软件卸载后，注册表已经清了，但文件夹还留在 <code>Program Files</code> 等地方。<br>
+                    <b>判定条件</b>：不在"已安装软件"列表 + 目录里没有 .exe + 至少 30 天没动过。<br>
+                    <b style="color: #4ade80;">✓ 安全</b>：删除是移入回收站，可恢复。
+                </div>
+                <div id="residueProgress" style="display: none;" class="scan-progress-info">
+                    <div class="spi-row" id="residueProgressCurrent">正在准备...</div>
+                    <div class="spi-row" id="residueProgressScanned"></div>
+                </div>
+                <div id="residueResults"></div>
+                <div class="btn-group">
+                    <button id="residueScanBtn" class="main-btn">开始扫描残留</button>
+                    <button id="residueDeleteBtn" class="main-btn">移入回收站</button>
+                </div>
+                <div id="residueStatus" style="text-align: center; color: var(--muted); margin-top: 16px; font-size: 13px;"></div>
+            </div>
+        </div>
+
+        <div id="chatPage" class="page">
+            <div class="setting-section" style="padding: 18px 22px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 14px; font-weight: 600;">微信 / QQ 聊天缓存清理</div>
+                        <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                            ⚠️ 只清理图片、视频、语音、文件等缓存。<br>
+                            聊天记录数据库（.db 文件）<b style="color: var(--success);">永不触碰</b>，消息绝对不会丢。
+                        </div>
+                    </div>
+                    <button id="chatScanBtn" class="main-btn" style="padding: 10px 22px; font-size: 14px;">🔍 检测</button>
+                </div>
+            </div>
+            <div class="time-filter">
+                <label>🕐 只清理</label>
+                <select id="chatTimeFilter">
+                    <option value="7">7 天前</option>
+                    <option value="30" selected>30 天前</option>
+                    <option value="90">90 天前</option>
+                    <option value="180">半年以前</option>
+                    <option value="365">一年以前</option>
+                </select>
+                <label>的文件</label>
+            </div>
+            <div id="chatList">
+                <div class="empty-state" style="padding-top: 60px;">
+                    <div class="empty-state-icon">💬</div>
+                    <div class="empty-state-title">检测聊天软件</div>
+                    <div class="empty-state-desc">点击「检测」自动查找微信 / QQ 目录</div>
+                    <div class="empty-state-desc" style="margin-top: 6px; font-size: 12px;">支持微信 3.x、微信 4.0、QQ</div>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button id="chatCleanBtn" class="main-btn">移入回收站</button>
+            </div>
+            <div id="chatStatus" style="text-align: center; color: var(--muted); margin-top: 16px; font-size: 13px;"></div>
+        </div>
+
+        <div id="shredPage" class="page">
+            <div class="shred-warning">
+                <div class="shred-warning-title">🔥 危险操作：文件粉碎机</div>
+                <div class="shred-warning-desc">
+                    粉碎的文件将被<b>覆写后永久删除</b>，<b>无法通过任何软件恢复</b>（包括回收站）。<br>
+                    仅用于处理<b>敏感隐私文件</b>（身份证、账单、密码本等）。<br>
+                    请确认你<b>绝对不需要</b>这些文件了，再用这个功能。
+                </div>
+            </div>
+
+            <div class="shred-dropzone">
+                <div class="shred-dropzone-icon">🔥</div>
+                <div class="shred-dropzone-title">选择要粉碎的文件</div>
+                <div class="shred-dropzone-desc">支持多选文件，或整个文件夹（会粉碎里面所有内容）</div>
+                <div class="shred-dropzone-btns">
+                    <button class="open-btn" onclick="shredPickFiles()" style="padding: 10px 20px; font-size: 13px;">📄 选择文件</button>
+                    <button class="open-btn" onclick="shredPickFolder()" style="padding: 10px 20px; font-size: 13px;">📁 选择文件夹</button>
+                </div>
+            </div>
+
+            <div class="shred-list" id="shredListBox" style="display: none;">
+                <div class="shred-list-header">
+                    <span>待粉碎清单（<span id="shredListCount">0</span> 项，共 <span id="shredListSize">0 B</span>）</span>
+                    <span class="si-remove" onclick="shredClearList()" title="清空列表" style="font-size: 12px; padding: 4px 10px; border: 1px solid rgba(229,72,77,0.3); border-radius: 6px;">清空</span>
+                </div>
+                <div class="shred-list-body" id="shredListBody"></div>
+            </div>
+
+            <div class="shred-settings">
+                <label>覆写次数：</label>
+                <select id="shredPasses">
+                    <option value="1">1 次（快速，适合普通隐私）</option>
+                    <option value="3" selected>3 次（标准，推荐）</option>
+                    <option value="7">7 次（军用级，最慢）</option>
+                </select>
+                <div style="flex: 1; color: var(--muted); font-size: 12px;">💡 覆盖次数越多越难恢复，但速度越慢</div>
+            </div>
+
+            <div class="shred-progress" id="shredProgressBox">
+                <div class="shred-progress-title">
+                    <div>
+                        <span class="shred-progress-flame">🔥</span>
+                        <span class="shred-progress-text">正在粉碎...</span>
+                    </div>
+                    <div class="spi-pct" id="shredProgressPct">0%</div>
+                </div>
+                <div class="shred-progress-file" id="shredProgressFile">准备中...</div>
+                <div class="shred-progress-bar-track">
+                    <div class="shred-progress-bar-fill" id="shredProgressBar" style="width: 0%;"></div>
+                </div>
+                <div class="shred-progress-info">
+                    <span id="shredProgressFiles">0 / 0 个文件</span>
+                    <span id="shredProgressBytes">0 B / 0 B</span>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button id="shredStartBtn" class="main-btn" style="background: linear-gradient(135deg, #e5484d, #cc3d42); box-shadow: 0 4px 16px rgba(229,72,77,0.5);">🔥 开始粉碎</button>
+                <button id="shredCancelBtn" class="main-btn" style="background: var(--panel); border: 1px solid var(--border); display: none;">取消</button>
+            </div>
+            <div id="shredStatus" style="text-align: center; color: var(--muted); margin-top: 16px; font-size: 13px;"></div>
+        </div>
+
+        <div id="toolsPage" class="page">
+            <div class="setting-section">
+                <h3>💻 系统信息<button class="open-btn" style="margin-left: auto;" onclick="refreshSystemInfo()">🔄 刷新</button></h3>
+                <div class="info-list" id="systemInfoBox"><div style="text-align:center; color:var(--muted); font-size:13px; padding: 20px;">正在加载...</div></div>
+            </div>
+            <div class="setting-section">
+                <h3>📊 清理历史</h3>
+                <div class="stat-row">
+                    <div class="stat-box"><div class="stat-value" id="statMonthFreed">-</div><div class="stat-label">本月累计清理</div></div>
+                    <div class="stat-box"><div class="stat-value" id="statTotalFreed">-</div><div class="stat-label">总累计清理</div></div>
+                    <div class="stat-box"><div class="stat-value" id="statTotalCount">-</div><div class="stat-label">总清理次数</div></div>
+                </div>
+                <div class="history-list" id="historyList"><div style="padding: 20px; text-align: center; color: var(--muted); font-size: 12px;">加载中...</div></div>
+            </div>
+            <div class="setting-section">
+                <h3>⏰ 定时关机</h3>
+                <div class="section-desc">设定一个倒计时，到时间后电脑会自动关机。你随时可以取消。</div>
+                <div class="setting-row">
+                    <div class="row-label">关机倒计时<div class="row-hint">选择时间后点击「设置」</div></div>
+                    <div class="row-control">
+                        <select id="shutdownMinutes">
+                            <option value="15">15 分钟</option>
+                            <option value="30" selected>30 分钟</option>
+                            <option value="60">1 小时</option>
+                            <option value="120">2 小时</option>
+                            <option value="180">3 小时</option>
+                            <option value="360">6 小时</option>
+                        </select>
+                        <button class="main-btn" style="background: linear-gradient(135deg, #f59e0b, #fbbf24); padding: 10px 22px; font-size: 13px;" onclick="setShutdown()">设置</button>
+                    </div>
+                </div>
+                <div id="shutdownStatus" style="display:none;">
+                    <div class="shutdown-display">
+                        <div class="shutdown-countdown" id="shutdownCountdown">--:--</div>
+                        <div class="shutdown-label">后自动关机</div>
+                        <button class="main-btn" style="background: linear-gradient(135deg, #e5484d, #cc3d42); margin-top: 16px; padding: 10px 28px; font-size: 13px;" onclick="cancelShutdown()">取消关机</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settingPage" class="page">
+            <div class="setting-section">
+                <h3>🎨 外观和音效</h3>
+                <div class="setting-row">
+                    <div class="row-label">主题<div class="row-hint">深色适合晚上，浅色适合白天</div></div>
+                    <div class="row-control">
+                        <select id="themeSelect">
+                            <option value="dark">🌙 深色</option>
+                            <option value="light">☀️ 浅色</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div class="row-label">清理完成音效<div class="row-hint">播放 Windows 系统提示音</div></div>
+                    <div class="row-control">
+                        <label class="switch">
+                            <input type="checkbox" id="soundSwitch" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div class="row-label">关闭时最小化到托盘<div class="row-hint">点 × 不退出，缩到右下角托盘。取消勾选则直接退出</div></div>
+                    <div class="row-control">
+                        <label class="switch">
+                            <input type="checkbox" id="traySwitch" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="setting-section">
+                <h3>🛡 进程白名单</h3>
+                <div class="section-desc">这些程序占用的文件会被自动跳过（不删除、不提示）。<br>比如：杀毒软件、微信、系统关键进程。</div>
+                <div id="whitelistBox" style="margin-bottom: 16px;"></div>
+                <div style="color: var(--muted); font-size: 13px; margin-bottom: 8px;">👇 从下面「正在运行的程序」中点击添加：</div>
+                <input type="text" id="procSearchInput" class="proc-search-input" placeholder="搜索程序名，如：微信、Chrome、输入法...">
+                <div class="proc-picker" id="procPicker"><div style="padding: 20px; text-align: center; color: var(--muted); font-size: 13px;">正在加载进程列表...</div></div>
+                <button class="main-btn" style="background: linear-gradient(135deg, var(--accent), var(--accent-2)); margin-top: 16px;" onclick="saveWhitelist()">保存白名单</button>
+            </div>
+            <div class="setting-section">
+                <h3>⏰ 自动清理</h3>
+                <div class="setting-row">
+                    <div class="row-label">启用自动清理<div class="row-hint">开启后，每次打开程序会检查是否符合条件</div></div>
+                    <div class="row-control">
+                        <label class="switch">
+                            <input type="checkbox" id="autoCleanEnabled">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div class="row-label">清理间隔<div class="row-hint">距离上次清理超过此时长才触发</div></div>
+                    <div class="row-control">
+                        <select id="autoCleanInterval">
+                            <option value="6">每 6 小时</option>
+                            <option value="12">每 12 小时</option>
+                            <option value="24" selected>每天</option>
+                            <option value="48">每 2 天</option>
+                            <option value="72">每 3 天</option>
+                            <option value="168">每周</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="setting-row" style="flex-direction: column; align-items: stretch;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div class="row-label">清理时间段<div class="row-hint">仅在此时间段内允许自动清理</div></div>
+                        <div class="row-control">
+                            <select id="autoCleanStartHour"></select>
+                            <span style="color: var(--muted); font-size: 13px;">~</span>
+                            <select id="autoCleanEndHour"></select>
+                        </div>
+                    </div>
+                    <div id="timeWindowHint"></div>
+                </div>
+                <div style="color: var(--muted); font-size: 12px; margin: 14px 0 8px 0; text-align: center;">上次清理时间：<span id="lastCleanTime" style="color: var(--text);">-</span></div>
+                <div style="text-align: center;"><button class="main-btn" style="background: linear-gradient(135deg, var(--accent), var(--accent-2));" onclick="saveAutoClean()">保存自动清理设置</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="resultModal" class="modal-overlay" style="display:none;">
+        <div class="modal-box">
+            <h3 style="color: var(--text); margin-top: 0; font-size: 16px;">提示</h3>
+            <pre id="resultMessage" style="text-align: left; color: var(--text); white-space: pre-wrap; font-family: inherit; margin: 15px 0; line-height: 1.7; font-size: 13px;"></pre>
+            <button id="modalCloseBtn" class="main-btn" style="background: linear-gradient(135deg, var(--accent), var(--accent-2)); width: 100%;">确定</button>
+        </div>
+    </div>
+
+    <script>
+        let currentLargeFiles = [];
+        let scanProgressTimer = null;
+        let currentWhitelist = [];
+        let allProcesses = [];
+        let processFriendlyCache = {};
+        let systemInfoInterval = null;
+        let shutdownTimer = null;
+        let diskChart = null;
+        let diskScanPolling = null;
+        let currentDiskPath = "";
+        let diskPathHistory = [];
+        let chatData = null;
+        let chatScanCache = {};
+        let currentDupGroups = [];
+        let dupScanPolling = null;
+        let emptyScanPolling = null;
+        let residueScanPolling = null;
+        let currentResidue = [];
+        let currentTheme = 'dark';
+        let soundEnabled = true;
+        let shredList = [];  // 待粉碎列表 {path, name, size, isDir}
+        let shredPolling = null;
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let i = 0;
+            while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+            return bytes.toFixed(i === 0 ? 0 : 2) + ' ' + units[i];
+        }
+
+        function playSound(kind) {
+            try { pywebview.api.play_sound(kind); } catch (e) {}
+        }
+
+        function applyTheme(theme) {
+            currentTheme = theme;
+            if (theme === 'light') {
+                document.body.classList.add('light');
+                document.getElementById('themeBtn').textContent = '☀️';
+            } else {
+                document.body.classList.remove('light');
+                document.getElementById('themeBtn').textContent = '🌙';
+            }
+        }
+
+        document.getElementById('themeBtn').addEventListener('click', async () => {
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+            try { await pywebview.api.save_theme(newTheme); } catch (e) {}
+            const sel = document.getElementById('themeSelect');
+            if (sel) sel.value = newTheme;
+        });
+
+        document.getElementById('soundBtn').addEventListener('click', async () => {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundBtn').textContent = soundEnabled ? '🔊' : '🔇';
+            try { await pywebview.api.save_sound(soundEnabled); } catch (e) {}
+            const sw = document.getElementById('soundSwitch');
+            if (sw) sw.checked = soundEnabled;
+            if (soundEnabled) playSound('notify');
+        });
+
+        function showResultModal(message, onConfirm = null) {
+            document.getElementById('resultMessage').textContent = message;
+            document.getElementById('resultModal').style.display = 'flex';
+            const confirmBtn = document.getElementById('modalCloseBtn');
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            newConfirmBtn.onclick = () => {
+                document.getElementById('resultModal').style.display = 'none';
+                if (onConfirm) onConfirm();
+            };
+        }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                const page = document.getElementById(tab.dataset.page);
+                page.classList.add('active');
+                page.style.animation = 'none';
+                setTimeout(() => { page.style.animation = ''; }, 10);
+                if (systemInfoInterval) { clearInterval(systemInfoInterval); systemInfoInterval = null; }
+                if (tab.dataset.page === 'settingPage') loadSettings();
+                if (tab.dataset.page === 'toolsPage') {
+                    refreshSystemInfo();
+                    loadShutdownStatus();
+                    systemInfoInterval = setInterval(loadSystemInfoOnly, 3000);
+                }
+                if (tab.dataset.page === 'diskPage') { setTimeout(() => { if (diskChart) diskChart.resize(); }, 100); }
+            });
+        });
+
+        document.querySelectorAll('.sub-tab').forEach(subTab => {
+            subTab.addEventListener('click', () => {
+                document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+                subTab.classList.add('active');
+                document.querySelectorAll('.sub-content').forEach(c => c.style.display = 'none');
+                const sub = subTab.dataset.sub;
+                if (sub === 'dup') document.getElementById('dupSub').style.display = 'block';
+                if (sub === 'empty') document.getElementById('emptySub').style.display = 'block';
+                if (sub === 'residue') document.getElementById('residueSub').style.display = 'block';
+            });
+        });
+
+        function startProgressPolling() {
+            const bar = document.getElementById('scanProgress');
+            bar.classList.add('active');
+            bar.textContent = '准备扫描...';
+            scanProgressTimer = setInterval(async () => {
+                try {
+                    const st = await pywebview.api.get_scan_progress();
+                    if (st.running) bar.textContent = `🔍 正在扫描 [${st.rule}]：${st.current}`;
+                    else bar.textContent = '✅ 扫描结束';
+                } catch (e) {}
+            }, 400);
+        }
+
+        function stopProgressPolling() {
+            if (scanProgressTimer) clearInterval(scanProgressTimer);
+            scanProgressTimer = null;
+            const bar = document.getElementById('scanProgress');
+            setTimeout(() => bar.classList.remove('active'), 1500);
+        }
+
+        function setHeroIdle() {
+            document.getElementById('heroCircle').className = 'hero-circle idle';
+            document.getElementById('heroIcon').style.display = 'block';
+            document.getElementById('heroValue').style.display = 'none';
+            document.getElementById('heroUnit').style.display = 'none';
+            document.getElementById('heroTitle').textContent = '点击下方开始扫描';
+            document.getElementById('heroSubtitle').textContent = '看看电脑里藏了多少垃圾';
+        }
+
+        function setHeroScanning() {
+            document.getElementById('heroCircle').className = 'hero-circle scanning';
+            document.getElementById('heroIcon').style.display = 'block';
+            document.getElementById('heroIcon').textContent = '🔍';
+            document.getElementById('heroValue').style.display = 'none';
+            document.getElementById('heroUnit').style.display = 'none';
+            document.getElementById('heroTitle').textContent = '正在扫描...';
+            document.getElementById('heroSubtitle').textContent = '正在分析各个角落的垃圾文件';
+        }
+
+        function setHeroResult(totalSize, fileCount) {
+            document.getElementById('heroCircle').className = 'hero-circle idle';
+            document.getElementById('heroIcon').style.display = 'none';
+            document.getElementById('heroValue').style.display = 'block';
+            document.getElementById('heroUnit').style.display = 'block';
+            document.getElementById('heroValue').textContent = formatSize(totalSize);
+            document.getElementById('heroUnit').textContent = `发现 ${fileCount} 个可清理文件`;
+            document.getElementById('heroTitle').textContent = totalSize > 0 ? '可以清理了！' : '电脑很干净 ✨';
+            document.getElementById('heroSubtitle').textContent = totalSize > 0 ? '勾选下方项目，点击「立即清理」' : '暂时没有发现可清理的垃圾';
+        }
+
+        const cleanList = document.getElementById('cleanList');
+        const status = document.getElementById('status');
+        const cleanBtn = document.getElementById('cleanBtn');
+
+        async function doScan() {
+            document.getElementById('scanBtn').textContent = '正在扫描...';
+            document.getElementById('scanBtn').disabled = true;
+            cleanList.innerHTML = '';
+            cleanBtn.style.display = 'none';
+            setHeroScanning();
+            startProgressPolling();
+            try {
+                const results = await pywebview.api.scan();
+                let totalSize = 0, totalCount = 0;
+                results.forEach(r => { totalSize += (r.size > 0 ? r.size : 0); totalCount += (r.count > 0 ? r.count : 0); });
+                cleanList.innerHTML = results.map((item, idx) => {
+                    const sizeClass = item.size > 0 ? 'item-size' : 'item-size zero';
+                    const sizeText = item.size > 0 ? formatSize(item.size) : '空';
+                    const checkedStr = item.count > 0 ? 'checked' : '';
+                    const disabledStr = item.count === 0 ? 'disabled' : '';
+                    return `
+                    <div class="item-card ${item.count > 0 ? 'checked' : ''}" data-id="${item.id}" style="animation-delay: ${idx * 0.06}s">
+                        <div class="item-left">
+                            <input type="checkbox" class="item-checkbox rule-cb" value="${item.id}" ${checkedStr} ${disabledStr}>
+                            <div class="item-info">
+                                <div class="item-name">${item.name}</div>
+                                <div class="item-meta">
+                                    <span>${item.count} 个文件</span>
+                                    ${item.requiresAdmin ? '<span class="badge danger">需管理员</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="${sizeClass}">${sizeText}</div>
+                    </div>`;
+                }).join('');
+                document.querySelectorAll('.rule-cb').forEach(cb => {
+                    cb.addEventListener('change', function() {
+                        const card = this.closest('.item-card');
+                        if (this.checked) card.classList.add('checked');
+                        else card.classList.remove('checked');
+                    });
+                });
+                setHeroResult(totalSize, totalCount);
+                document.getElementById('scanBtn').textContent = '重新扫描';
+                document.getElementById('scanBtn').disabled = false;
+                if (totalSize > 0) cleanBtn.style.display = 'block';
+                status.textContent = totalSize > 0 ? '扫描完成，可清理项目已勾选' : '扫描完成，电脑很干净';
+            } finally {
+                stopProgressPolling();
+            }
+        }
+
+        document.getElementById('scanBtn').addEventListener('click', doScan);
+
+        function showTrashAnimation(count) {
+            const trash = document.createElement('div');
+            trash.className = 'trash-fly';
+            trash.textContent = '🗑️';
+            document.body.appendChild(trash);
+            setTimeout(() => trash.remove(), 1300);
+
+            const counter = document.createElement('div');
+            counter.className = 'trash-count';
+            counter.textContent = `+${count}`;
+            document.body.appendChild(counter);
+            setTimeout(() => counter.remove(), 1500);
+        }
+
+        async function doClean(ruleIds) {
+            if (ruleIds.length === 0) { showResultModal('你还没有勾选任何垃圾哦！'); return; }
+            cleanBtn.textContent = '正在清理...'; cleanBtn.disabled = true;
+            status.textContent = '正在清理，请稍等...';
+
+            const cards = document.querySelectorAll('.rule-cb:checked');
+            cards.forEach((cb, i) => {
+                const card = cb.closest('.item-card');
+                setTimeout(() => card.classList.add('cleaning'), i * 120);
+            });
+
+            try {
+                const res = await pywebview.api.clean(ruleIds);
+                if (res.needsAdmin) {
+                    cleanBtn.textContent = '立即清理'; cleanBtn.disabled = false;
+                    showResultModal('清理“回收站”或“系统更新残留”需要管理员权限。\n\n程序将自动以管理员身份重启，并继续刚才的清理。');
+                    try { await pywebview.api.restart_as_admin(res.rule_ids); }
+                    catch (e) { status.textContent = '提权失败，请手动以管理员身份运行。'; }
+                    return;
+                }
+                let detailText = '', totalSkipped = 0, allBlocked = [];
+                res.details.forEach(d => {
+                    totalSkipped += d.skipped;
+                    if (d.freed > 0) detailText += `▸ ${d.name}：${formatSize(d.freed)}\n`;
+                    else if (d.freed === -1) detailText += `▸ ${d.name}：已执行系统清理\n`;
+                    if (d.error) detailText += `  (部分失败: ${d.error})\n`;
+                    if (d.blocked) {
+                        for (const [path, procs] of Object.entries(d.blocked)) {
+                            allBlocked.push({ path, processes: procs });
+                        }
+                    }
+                });
+
+                if (res.totalFreed > 0) {
+                    showTrashAnimation(cards.length);
+                    playSound('success');
+                }
+
+                let msg = `🎉 清理完成！\n\n总共省出：${formatSize(res.totalFreed)}\n\n具体清理了：\n${detailText || '（没有清理任何东西）'}`;
+                if (totalSkipped > 0) msg += `\n提示：${totalSkipped} 个文件正在使用中，已跳过。`;
+                showResultModal(msg);
+                status.textContent = `上次清理省出了 ${formatSize(res.totalFreed)} 空间`;
+
+                setTimeout(() => {
+                    document.querySelectorAll('.rule-cb:checked').forEach(cb => {
+                        const card = cb.closest('.item-card');
+                        if (card) {
+                            card.querySelector('.item-size').textContent = '已清理';
+                            card.querySelector('.item-size').classList.remove('zero');
+                            card.querySelector('.item-size').classList.add('done');
+                            card.classList.add('done');
+                            card.classList.remove('cleaning');
+                        }
+                        cb.checked = false;
+                        cb.disabled = true;
+                    });
+                }, 800);
+
+                if (allBlocked.length > 0) setTimeout(() => renderBlockedWindow(allBlocked), 1200);
+            } catch (e) {
+                showResultModal('清理时遇到点问题：' + e);
+            } finally {
+                cleanBtn.textContent = '立即清理'; cleanBtn.disabled = false;
+            }
+        }
+
+        async function renderBlockedWindow(blockedList) {
+            const box = document.getElementById('resultModal');
+            const msgEl = document.getElementById('resultMessage');
+            msgEl.innerHTML = '';
+            const title = document.createElement('div');
+            title.style.marginBottom = '12px';
+            title.textContent = `以下 ${blockedList.length} 个文件被程序占用，无法清理：`;
+            msgEl.appendChild(title);
+            for (let idx = 0; idx < Math.min(blockedList.length, 15); idx++) {
+                const item = blockedList[idx];
+                const fileName = item.path.split('\\').pop();
+                const div = document.createElement('div');
+                div.style.marginBottom = '14px';
+                let procsHtml = '';
+                for (const p of item.processes) {
+                    let friendlyName = processFriendlyCache[p.name.toLowerCase()] || p.name;
+                    procsHtml += `<button class="kill-btn" onclick="killProcess(${p.pid}, this)">结束「${friendlyName}」</button> `;
+                }
+                div.innerHTML = `<div style="color: var(--text); margin-bottom: 6px; font-size: 12px;">📄 ${fileName}</div><div>${procsHtml}</div>`;
+                msgEl.appendChild(div);
+            }
+            const tip = document.createElement('div');
+            tip.style.cssText = 'color: var(--muted); font-size: 12px; margin-top: 12px;';
+            tip.textContent = '提示：结束进程后，请重新点击「立即清理」。';
+            msgEl.appendChild(tip);
+            box.style.display = 'flex';
+        }
+
+        async function killProcess(pid, btn) {
+            btn.disabled = true;
+            btn.textContent = '结束中...';
+            const res = await pywebview.api.kill_process(pid);
+            if (res.ok) { btn.textContent = '✅ ' + res.msg; btn.style.background = 'var(--success)'; btn.style.color = 'white'; }
+            else { btn.textContent = '❌ ' + res.msg; btn.style.background = 'var(--danger)'; btn.style.color = 'white'; }
+        }
+
+        cleanBtn.addEventListener('click', async function() {
+            const checkedIds = Array.from(document.querySelectorAll('.rule-cb:checked')).map(cb => cb.value);
+            if (checkedIds.length === 0) { showResultModal('你还没有勾选任何垃圾哦！'); return; }
+            showResultModal('确定要清理这些垃圾吗？\n正在使用中的文件会自动跳过。', () => doClean(checkedIds));
+        });
+
+        async function initApp() {
+            setHeroIdle();
+            try {
+                const init = await pywebview.api.get_initial_state();
+                applyTheme(init.theme || 'dark');
+                soundEnabled = init.sound !== false;
+                document.getElementById('soundBtn').textContent = soundEnabled ? '🔊' : '🔇';
+                const sw = document.getElementById('soundSwitch');
+                if (sw) sw.checked = soundEnabled;
+                const sel = document.getElementById('themeSelect');
+                if (sel) sel.value = init.theme || 'dark';
+                const traySw = document.getElementById('traySwitch');
+                if (traySw) traySw.checked = init.minimize_to_tray !== false;
+            } catch (e) {}
+
+            setTimeout(() => { document.getElementById('splash').classList.add('hide'); }, 1200);
+            try {
+                const pendingIds = await pywebview.api.get_pending_clean();
+                if (pendingIds && pendingIds.length > 0) {
+                    status.textContent = '检测到刚才的清理任务，正在自动继续...';
+                    await doScan();
+                    document.querySelectorAll('.rule-cb').forEach(cb => { cb.checked = pendingIds.includes(cb.value); });
+                    setTimeout(() => doClean(pendingIds), 500);
+                } else {
+                    try {
+                        const check = await pywebview.api.check_auto_clean();
+                        if (check.should_clean) {
+                            showResultModal(`检测到您开启了自动清理，且距上次清理已超过间隔（上次：${check.last_str}）。\n\n点击“确定”立即执行一次清理。`, () => {
+                                document.querySelector('.tab[data-page="cleanPage"]').click();
+                                setTimeout(doScan, 200);
+                            });
+                        }
+                    } catch (e) {}
+                }
+            } catch (e) {}
+        }
+
+        if (window.pywebview) { initApp(); }
+        else { window.addEventListener('pywebviewready', initApp); }
+
+        document.getElementById('largeScanBtn').addEventListener('click', async function() {
+            this.textContent = '正在全盘查找...'; this.disabled = true;
+            const largeList = document.getElementById('largeList');
+            const deleteLargeBtn = document.getElementById('deleteLargeBtn');
+            deleteLargeBtn.style.display = 'none';
+            document.getElementById('largeStatus').textContent = '正在寻找大文件，请耐心等待...';
+            largeList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-title">正在仔细搜查</div><div class="empty-state-desc">这一步可能会花 1-2 分钟</div></div>';
+            try {
+                const results = await pywebview.api.scan_large_files();
+                currentLargeFiles = results;
+                if (results.length === 0) {
+                    largeList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✨</div><div class="empty-state-title">没有发现大文件</div><div class="empty-state-desc">你的电脑很干净</div></div>';
+                } else {
+                    largeList.innerHTML = results.map((item, index) => {
+                        const warning = item.warning || { label: "未知文件", color: "unknown", can_delete: true };
+                        const badgeHTML = `<span class="badge ${warning.color}">${warning.label}</span>`;
+                        const disabledStr = !warning.can_delete ? 'disabled' : '';
+                        return `
+                        <div class="large-item-card" style="animation-delay: ${index * 0.03}s">
+                            <div class="large-item-left">
+                                <input type="checkbox" class="large-cb" value="${index}" ${disabledStr}>
+                                <div class="large-file-row" style="flex:1; min-width:0;">
+                                    <div class="large-file-path" title="${item.path}">${item.path}</div>
+                                    <div>${badgeHTML}</div>
+                                </div>
+                            </div>
+                            <div class="large-actions">
+                                <span class="item-size">${formatSize(item.size)}</span>
+                                <button class="open-btn" onclick="openLocation('${item.path.replace(/\\/g, '\\\\')}')">打开位置</button>
+                            </div>
+                        </div>`;
+                    }).join('');
+                    deleteLargeBtn.style.display = 'block';
+                }
+                document.getElementById('largeStatus').textContent = `共找到 ${results.length} 个大文件`;
+            } catch (e) {
+                document.getElementById('largeStatus').textContent = '查找出错：' + e;
+            } finally {
+                this.textContent = '重新扫描';
+                this.disabled = false;
+            }
+        });
+
+        document.getElementById('deleteLargeBtn').addEventListener('click', async function() {
+            const checkedBoxes = document.querySelectorAll('.large-cb:checked');
+            if (checkedBoxes.length === 0) { showResultModal('请先勾选要清理的大文件！'); return; }
+            showResultModal(`确定要将选中的 ${checkedBoxes.length} 个文件移入回收站吗？\n\n💡 不会永久删除，你可以在回收站里找回。`, async () => {
+                const selectedPaths = Array.from(checkedBoxes).map(cb => currentLargeFiles[parseInt(cb.value)].path);
+                this.textContent = '正在移入回收站...'; this.disabled = true;
+                try {
+                    const res = await pywebview.api.delete_large_files(selectedPaths);
+                    if (res.freed > 0) { showTrashAnimation(checkedBoxes.length); playSound('success'); }
+                    let msg = `✅ 已成功将 ${res.deleted} 个文件移入回收站\n释放空间：${formatSize(res.freed)}`;
+                    if (res.errors.length > 0) msg += `\n\n其他错误：\n${res.errors.slice(0, 5).join('\n')}`;
+                    showResultModal(msg);
+                    checkedBoxes.forEach(cb => cb.closest('.large-item-card').remove());
+                    const remaining = document.querySelectorAll('.large-cb').length;
+                    document.getElementById('largeStatus').textContent = `已移入回收站 ${res.deleted} 个，剩余 ${remaining} 个`;
+                    if (remaining === 0) this.style.display = 'none';
+                } catch (e) {
+                    showResultModal('删除出错：' + e);
+                } finally {
+                    this.textContent = '移入回收站';
+                    this.disabled = false;
+                }
+            });
+        });
+
+        async function openLocation(filepath) {
+            const success = await pywebview.api.open_file_location(filepath);
+            if (!success) showResultModal('无法打开该位置，文件可能已经被删除或移动。');
+        }
+
+        function initDiskChart() {
+            if (diskChart) return;
+            const container = document.getElementById('diskChart');
+            if (typeof echarts === 'undefined') {
+                container.innerHTML = '<div class="empty-state" style="padding-top: 180px;"><div class="empty-state-icon">⚠️</div><div>ECharts 加载失败</div><div style="margin-top: 6px; font-size: 12px;">请检查 echarts.min.js 是否在项目根目录</div></div>';
+                return;
+            }
+            diskChart = echarts.init(container, null, { renderer: 'canvas' });
+            window.addEventListener('resize', () => { if (diskChart) diskChart.resize(); });
+            diskChart.on('click', function(params) {
+                if (!params.data || !params.data.path) return;
+                if (params.data.isDir) {
+                    diskPathHistory.push(currentDiskPath);
+                    startDiskScan(params.data.path);
+                } else if (params.data.isDir === false) {
+                    const ok = confirm(`这是一个文件：\n${params.data.path}\n\n是否在资源管理器中定位它？`);
+                    if (ok) pywebview.api.open_file_location(params.data.path);
+                }
+            });
+            diskChart.on('contextmenu', function(params) {
+                if (params.event && params.event.event) params.event.event.preventDefault();
+                if (!params.data || !params.data.path) return;
+                pywebview.api.open_folder(params.data.path);
+            });
+        }
+
+        function colorByRank(rank, total) {
+            const t = total <= 1 ? 0 : rank / (total - 1);
+            const h = 210 - t * 210;
+            const s = 62 + t * 20;
+            const l = 52 - t * 12;
+            return `hsl(${h}, ${s}%, ${l}%)`;
+        }
+
+        function updateBreadcrumb(path) {
+            const bc = document.getElementById('diskBreadcrumb');
+            if (!path) { bc.innerHTML = '<span style="color: var(--muted);">尚未扫描</span>'; return; }
+            const parts = path.split('\\').filter(p => p);
+            let html = '', accumulated = '';
+            parts.forEach((p, i) => {
+                accumulated += p + '\\';
+                if (i > 0) html += '<span class="sep">›</span>';
+                html += `<span class="crumb" onclick="jumpToPath('${accumulated.replace(/\\/g, '\\\\')}')">${p}</span>`;
+            });
+            html += '<span style="color: #4f7cff; margin-left: 8px; font-size: 11px;">💡 右键方块可在资源管理器中打开</span>';
+            bc.innerHTML = html;
+        }
+
+        async function jumpToPath(path) {
+            diskPathHistory.push(currentDiskPath);
+            startDiskScan(path);
+        }
+
+        document.getElementById('diskUpBtn').addEventListener('click', () => {
+            if (diskPathHistory.length > 0) {
+                const prev = diskPathHistory.pop();
+                startDiskScan(prev);
+            }
+        });
+
+        document.getElementById('diskOpenBtn').addEventListener('click', () => {
+            if (currentDiskPath) pywebview.api.open_folder(currentDiskPath);
+        });
+
+        async function startDiskScan(path) {
+            initDiskChart();
+            if (!diskChart) return;
+            currentDiskPath = path;
+            updateBreadcrumb(path);
+            document.getElementById('diskScanBtn').disabled = true;
+            document.getElementById('diskStatus').textContent = '正在准备扫描...';
+            document.getElementById('diskStats').style.display = 'none';
+            document.getElementById('diskUpBtn').style.display = diskPathHistory.length > 0 ? 'block' : 'none';
+            document.getElementById('diskOpenBtn').style.display = 'block';
+            diskChart.clear();
+            diskChart.showLoading({ text: '正在扫描...', color: '#4f7cff', textColor: document.body.classList.contains('light') ? '#1a1d23' : '#e6e9ef', maskColor: document.body.classList.contains('light') ? 'rgba(245,247,250,0.9)' : 'rgba(10,12,16,0.8)', fontSize: 14, spinnerRadius: 12, lineWidth: 3 });
+            const res = await pywebview.api.start_disk_scan(path);
+            if (!res.ok) {
+                diskChart.hideLoading();
+                document.getElementById('diskScanBtn').disabled = false;
+                document.getElementById('diskStatus').textContent = res.msg;
+                return;
+            }
+            if (diskScanPolling) clearInterval(diskScanPolling);
+            diskScanPolling = setInterval(async () => {
+                const st = await pywebview.api.get_disk_scan_status();
+                if (st.running && st.current) document.getElementById('diskStatus').textContent = '正在扫描：' + st.current;
+                if (st.done) {
+                    clearInterval(diskScanPolling);
+                    diskScanPolling = null;
+                    diskChart.hideLoading();
+                    document.getElementById('diskScanBtn').disabled = false;
+                    if (st.error) { document.getElementById('diskStatus').textContent = '扫描失败：' + st.error; return; }
+                    renderDiskChart(st.results, st.root);
+                }
+            }, 400);
+        }
+
+        function renderDiskChart(items, root) {
+            if (!diskChart) return;
+            const validItems = items.filter(it => it.size > 0);
+            const totalSize = validItems.reduce((s, it) => s + it.size, 0);
+            if (validItems.length === 0) {
+                document.getElementById('diskStatus').textContent = '该目录为空或无法访问';
+                return;
+            }
+            const bigItems = [];
+            let othersSize = 0, othersCount = 0;
+            validItems.forEach(it => {
+                if (it.size >= 500 * 1024 * 1024 || bigItems.length < 15) bigItems.push(it);
+                else { othersSize += it.size; othersCount++; }
+            });
+            if (othersCount > 0) {
+                bigItems.push({ name: `其他 ${othersCount} 项`, path: "", size: othersSize, isDir: false, isOthers: true });
+            }
+            const chartData = bigItems.map((it, idx) => {
+                const icon = it.isOthers ? '📦' : (it.isDir ? '📁' : '📄');
+                const shortName = it.name.length > 20 ? it.name.slice(0, 18) + '…' : it.name;
+                return {
+                    name: shortName, value: it.size, path: it.path, isDir: it.isDir, isOthers: it.isOthers || false,
+                    itemStyle: { color: it.isOthers ? (document.body.classList.contains('light') ? '#c5cad4' : '#3a4252') : colorByRank(idx, bigItems.length), borderColor: document.body.classList.contains('light') ? '#f5f7fa' : '#0a0c10', borderWidth: 2, gapWidth: 2 },
+                    label: {
+                        show: it.size / totalSize > 0.02,
+                        formatter: `{name|${icon} ${shortName}}\n{size|${formatSize(it.size)}}`,
+                        rich: {
+                            name: { color: '#ffffff', fontSize: 12, fontWeight: 600, lineHeight: 18, textShadowColor: 'rgba(0,0,0,0.7)', textShadowBlur: 4 },
+                            size: { color: 'rgba(255,255,255,0.85)', fontSize: 11, lineHeight: 16, textShadowColor: 'rgba(0,0,0,0.7)', textShadowBlur: 4 }
+                        }
+                    }
+                };
+            });
+            diskChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    backgroundColor: 'rgba(20,23,31,0.95)', borderColor: '#4f7cff', borderWidth: 1,
+                    textStyle: { color: '#e6e9ef', fontSize: 12 },
+                    formatter: function(params) {
+                        const d = params.data;
+                        if (d.isOthers) return `<b>${d.name}</b><br/>合计：${formatSize(d.value)}`;
+                        const type = d.isDir ? '📁 文件夹' : '📄 文件';
+                        let extra = d.isDir ? `<div style="color:#4f7cff;font-size:11px;margin-top:6px;">💡 左键下钻 · 右键打开资源管理器</div>` : `<div style="color:#4f7cff;font-size:11px;margin-top:6px;">💡 右键打开所在位置</div>`;
+                        return `<b>${params.name}</b><br/>${type}<br/>大小：<b style="color:#6b90ff">${formatSize(d.value)}</b><br/><div style="color:#8b93a7;font-size:11px;margin-top:6px;word-break:break-all;max-width:400px;">${d.path || ''}</div>${extra}`;
+                    }
+                },
+                series: [{
+                    type: 'treemap', roam: false, nodeClick: false, breadcrumb: { show: false },
+                    width: '100%', height: '100%', top: 4, left: 4, right: 4, bottom: 4,
+                    data: chartData, label: { position: 'insideTopLeft', padding: [8, 8] },
+                    itemStyle: { borderColor: '#0a0c10', borderWidth: 2, gapWidth: 2 },
+                    emphasis: { itemStyle: { borderColor: '#ffffff', borderWidth: 2, shadowBlur: 20, shadowColor: 'rgba(79,124,255,0.8)' } },
+                    levels: []
+                }]
+            }, true);
+            document.getElementById('diskStats').style.display = 'flex';
+            document.getElementById('diskStatTotal').textContent = formatSize(totalSize);
+            document.getElementById('diskStatCount').textContent = validItems.length + ' 项';
+            document.getElementById('diskStatTop').textContent = validItems[0] ? validItems[0].name.slice(0, 12) : '-';
+            document.getElementById('diskStatTop').title = validItems[0] ? validItems[0].path : '';
+            document.getElementById('diskStatus').textContent = `扫描完成 · 共 ${validItems.length} 项`;
+        }
+
+        document.getElementById('diskScanBtn').addEventListener('click', () => {
+            diskPathHistory = [];
+            startDiskScan('C:\\');
+        });
+
+        async function pickFolderFor(inputId) {
+            const res = await pywebview.api.pick_folder();
+            if (res.ok) document.getElementById(inputId).value = res.path;
+        }
+
+        document.getElementById('dupScanBtn').addEventListener('click', async function() {
+            const path = document.getElementById('dupPath').value.trim();
+            if (!path) { showResultModal('请先选择要扫描的目录'); return; }
+            const minSize = document.getElementById('dupMinSize').value;
+            this.textContent = '扫描中...'; this.disabled = true;
+            document.getElementById('dupResults').innerHTML = '';
+            document.getElementById('dupDeleteBtn').style.display = 'none';
+            document.getElementById('dupProgress').style.display = 'block';
+            document.getElementById('dupStatus').textContent = '';
+            const res = await pywebview.api.start_dup_scan(path, parseInt(minSize));
+            if (!res.ok) {
+                showResultModal(res.msg);
+                this.textContent = '开始查找重复文件'; this.disabled = false;
+                document.getElementById('dupProgress').style.display = 'none';
+                return;
+            }
+            if (dupScanPolling) clearInterval(dupScanPolling);
+            dupScanPolling = setInterval(async () => {
+                const st = await pywebview.api.get_dup_scan_status();
+                document.getElementById('dupProgressPhase').textContent = `📊 阶段：${st.phase || '扫描中'} · 已收集 ${st.scanned} 个文件`;
+                if (st.current) document.getElementById('dupProgressCurrent').textContent = '📂 ' + st.current;
+                document.getElementById('dupProgressBar').style.width = (st.progress || 0) + '%';
+                if (st.done) {
+                    clearInterval(dupScanPolling);
+                    dupScanPolling = null;
+                    this.textContent = '重新查找'; this.disabled = false;
+                    document.getElementById('dupProgress').style.display = 'none';
+                    if (st.error) { document.getElementById('dupStatus').textContent = '扫描出错：' + st.error; return; }
+                    renderDupResults(st.groups);
+                }
+            }, 500);
+        });
+
+        function renderDupResults(groups) {
+            currentDupGroups = groups;
+            const box = document.getElementById('dupResults');
+            if (!groups || groups.length === 0) {
+                box.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✨</div><div class="empty-state-title">没有发现重复文件</div><div class="empty-state-desc">电脑很干净</div></div>';
+                document.getElementById('dupDeleteBtn').style.display = 'none';
+                document.getElementById('dupStatus').textContent = '';
+                return;
+            }
+            const totalWaste = groups.reduce((s, g) => s + g.waste, 0);
+            box.innerHTML = `
+                <div style="padding: 12px 16px; background: rgba(229,72,77,0.08); border: 1px solid rgba(229,72,77,0.3); border-radius: 10px; margin-bottom: 14px;">
+                    <div style="font-size: 14px; font-weight: 600; color: #ff6b70;">⚠️ 发现 ${groups.length} 组重复文件，浪费了 ${formatSize(totalWaste)} 空间</div>
+                    <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">💡 每组默认保留第一个（绿色），勾选要删除的副本。全部移入回收站，可恢复。</div>
+                </div>
+            ` + groups.map((g, gi) => `
+                <div class="dup-group">
+                    <div class="dup-group-header">
+                        <span class="dg-icon">📄</span>
+                        <div class="dg-info">
+                            <div class="dg-title">第 ${gi + 1} 组 · 每个 ${formatSize(g.size)} · 共 ${g.count} 份</div>
+                            <div class="dg-sub">重复了 ${g.count - 1} 次</div>
+                        </div>
+                        <div class="dg-waste">浪费 ${formatSize(g.waste)}</div>
+                    </div>
+                    ${g.paths.map((p, pi) => `
+                        <div class="dup-file ${pi === 0 ? 'keep' : ''}">
+                            ${pi === 0
+                                ? '<span style="width:16px; text-align:center; color: #4ade80; font-weight: bold;">✓</span>'
+                                : `<input type="checkbox" class="dup-cb" data-gi="${gi}" data-pi="${pi}">`}
+                            <span class="df-path" title="${p}">${p}</span>
+                            ${pi === 0 ? '<span class="df-keep">保留</span>' : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+            document.getElementById('dupDeleteBtn').style.display = 'block';
+            document.getElementById('dupStatus').textContent = `共 ${groups.length} 组，勾选后点「移入回收站」`;
+        }
+
+        document.getElementById('dupDeleteBtn').addEventListener('click', async function() {
+            const checked = document.querySelectorAll('.dup-cb:checked');
+            if (checked.length === 0) { showResultModal('请先勾选要删除的重复文件'); return; }
+            const paths = Array.from(checked).map(cb => {
+                const gi = parseInt(cb.dataset.gi);
+                const pi = parseInt(cb.dataset.pi);
+                return currentDupGroups[gi].paths[pi];
+            });
+            showResultModal(`确定要将选中的 ${paths.length} 个重复文件移入回收站吗？\n\n💡 每组保留一个，删除的都是副本`, async () => {
+                this.textContent = '正在清理...'; this.disabled = true;
+                try {
+                    const res = await pywebview.api.delete_dup_files(paths);
+                    if (res.freed > 0) { showTrashAnimation(paths.length); playSound('success'); }
+                    showResultModal(`✅ 清理完成！\n\n已删除 ${res.deleted} 个文件\n释放空间：${formatSize(res.freed)}`);
+                    document.getElementById('dupScanBtn').click();
+                } catch (e) {
+                    showResultModal('删除出错：' + e);
+                } finally {
+                    this.textContent = '移入回收站'; this.disabled = false;
+                }
+            });
+        });
+
+        document.getElementById('emptyScanBtn').addEventListener('click', async function() {
+            const path = document.getElementById('emptyPath').value.trim();
+            if (!path) { showResultModal('请先选择要扫描的目录'); return; }
+            this.textContent = '扫描中...'; this.disabled = true;
+            document.getElementById('emptyResults').innerHTML = '';
+            document.getElementById('emptyDeleteBtn').style.display = 'none';
+            document.getElementById('emptyProgress').style.display = 'block';
+            document.getElementById('emptyStatus').textContent = '';
+            const res = await pywebview.api.start_empty_scan(path);
+            if (!res.ok) {
+                showResultModal(res.msg);
+                this.textContent = '开始查找空文件夹'; this.disabled = false;
+                document.getElementById('emptyProgress').style.display = 'none';
+                return;
+            }
+            if (emptyScanPolling) clearInterval(emptyScanPolling);
+            emptyScanPolling = setInterval(async () => {
+                const st = await pywebview.api.get_empty_scan_status();
+                if (st.current) document.getElementById('emptyProgressCurrent').textContent = '📂 ' + st.current;
+                document.getElementById('emptyProgressScanned').textContent = `已扫描 ${st.scanned} 个目录`;
+                if (st.done) {
+                    clearInterval(emptyScanPolling);
+                    emptyScanPolling = null;
+                    this.textContent = '重新扫描'; this.disabled = false;
+                    document.getElementById('emptyProgress').style.display = 'none';
+                    if (st.error) { document.getElementById('emptyStatus').textContent = '扫描出错：' + st.error; return; }
+                    renderEmptyResults(st.folders);
+                }
+            }, 500);
+        });
+
+        function renderEmptyResults(folders) {
+            const box = document.getElementById('emptyResults');
+            if (!folders || folders.length === 0) {
+                box.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✨</div><div class="empty-state-title">没有发现空文件夹</div></div>';
+                document.getElementById('emptyDeleteBtn').style.display = 'none';
+                document.getElementById('emptyStatus').textContent = '';
+                return;
+            }
+            box.innerHTML = `
+                <div style="padding: 12px 16px; background: rgba(79,124,255,0.08); border: 1px solid rgba(79,124,255,0.3); border-radius: 10px; margin-bottom: 14px;">
+                    <div style="font-size: 14px; font-weight: 600; color: var(--accent);">📁 发现 ${folders.length} 个空文件夹</div>
+                    <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">💡 全部默认勾选。空文件夹删除不影响任何文件。</div>
+                </div>
+            ` + folders.map((f, i) => `
+                <div class="empty-folder-item">
+                    <input type="checkbox" class="empty-cb" value="${encodeURIComponent(f)}" checked>
+                    <span class="ef-path" title="${f}">${f}</span>
+                </div>
+            `).join('');
+            document.getElementById('emptyDeleteBtn').style.display = 'block';
+            document.getElementById('emptyStatus').textContent = `共 ${folders.length} 个空文件夹`;
+        }
+
+        document.getElementById('emptyDeleteBtn').addEventListener('click', async function() {
+            const checked = document.querySelectorAll('.empty-cb:checked');
+            if (checked.length === 0) { showResultModal('请先勾选要删除的空文件夹'); return; }
+            const folders = Array.from(checked).map(cb => decodeURIComponent(cb.value));
+            showResultModal(`确定要删除选中的 ${folders.length} 个空文件夹吗？\n\n💡 只删空的，不影响任何文件`, async () => {
+                this.textContent = '删除中...'; this.disabled = true;
+                try {
+                    const res = await pywebview.api.delete_empty_folders(folders);
+                    playSound('success');
+                    showResultModal(`✅ 删除完成！\n\n成功删除 ${res.deleted} 个空文件夹${res.errors > 0 ? `\n失败 ${res.errors} 个（可能被占用）` : ''}`);
+                    document.getElementById('emptyScanBtn').click();
+                } catch (e) {
+                    showResultModal('删除出错：' + e);
+                } finally {
+                    this.textContent = '删除选中'; this.disabled = false;
+                }
+            });
+        });
+
+        // ============ 卸载残留 ============
+        document.getElementById('residueScanBtn').addEventListener('click', async function() {
+            this.textContent = '扫描中...'; this.disabled = true;
+            document.getElementById('residueResults').innerHTML = '';
+            document.getElementById('residueDeleteBtn').style.display = 'none';
+            document.getElementById('residueProgress').style.display = 'block';
+            document.getElementById('residueStatus').textContent = '';
+
+            const res = await pywebview.api.start_residue_scan();
+            if (!res.ok) {
+                showResultModal(res.msg);
+                this.textContent = '开始扫描残留'; this.disabled = false;
+                document.getElementById('residueProgress').style.display = 'none';
+                return;
+            }
+
+            if (residueScanPolling) clearInterval(residueScanPolling);
+            residueScanPolling = setInterval(async () => {
+                const st = await pywebview.api.get_residue_scan_status();
+                if (st.current) document.getElementById('residueProgressCurrent').textContent = '🔍 ' + st.current;
+                document.getElementById('residueProgressScanned').textContent = `已检查 ${st.scanned} 个目录`;
+
+                if (st.done) {
+                    clearInterval(residueScanPolling);
+                    residueScanPolling = null;
+                    this.textContent = '重新扫描'; this.disabled = false;
+                    document.getElementById('residueProgress').style.display = 'none';
+                    if (st.error) { document.getElementById('residueStatus').textContent = '扫描出错：' + st.error; return; }
+                    renderResidueResults(st.results);
+                }
+            }, 500);
+        });
+
+        function renderResidueResults(results) {
+            currentResidue = results;
+            const box = document.getElementById('residueResults');
+
+            if (!results || results.length === 0) {
+                box.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✨</div><div class="empty-state-title">没有发现卸载残留</div><div class="empty-state-desc">你的电脑很干净</div></div>';
+                document.getElementById('residueDeleteBtn').style.display = 'none';
+                document.getElementById('residueStatus').textContent = '';
+                return;
+            }
+
+            const totalSize = results.reduce((s, r) => s + r.size, 0);
+
+            box.innerHTML = `
+                <div style="padding: 12px 16px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px; margin-bottom: 14px;">
+                    <div style="font-size: 14px; font-weight: 600; color: #f59e0b;">
+                        🗑️ 发现 ${results.length} 个疑似残留，占用 ${formatSize(totalSize)}
+                    </div>
+                    <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                        💡 请仔细核对目录名，确认是不用的软件后再删。全部移入回收站，可恢复。
+                    </div>
+                </div>
+            ` + results.map((r, i) => {
+                const riskColor = r.risk === 'medium' ? '#f59e0b' : '#4ade80';
+                const riskLabel = r.risk === 'medium' ? '⚠️ 建议核对' : '✅ 大概率安全';
+                return `
+                <div class="empty-folder-item" style="flex-wrap: wrap;">
+                    <input type="checkbox" class="residue-cb" value="${encodeURIComponent(r.path)}">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="color: var(--text); font-size: 13px; font-weight: 500; margin-bottom: 3px;">${r.name}</div>
+                        <div class="ef-path" title="${r.path}">${r.path}</div>
+                    </div>
+                    <div style="text-align: right; white-space: nowrap; margin-left: 12px;">
+                        <div style="color: var(--accent); font-weight: 700; font-size: 13px;">${formatSize(r.size)}</div>
+                        <div style="font-size: 11px; color: var(--muted); margin-top: 3px;">${r.days_old} 天没动过</div>
+                        <div style="font-size: 10px; color: ${riskColor}; margin-top: 2px;">${riskLabel}</div>
+                    </div>
+                </div>
+            `;
+            }).join('');
+
+            document.getElementById('residueDeleteBtn').style.display = 'block';
+            document.getElementById('residueStatus').textContent = `共 ${results.length} 个疑似残留，勾选后点「移入回收站」`;
+        }
+
+        document.getElementById('residueDeleteBtn').addEventListener('click', async function() {
+            const checked = document.querySelectorAll('.residue-cb:checked');
+            if (checked.length === 0) { showResultModal('请先勾选要删除的残留文件夹'); return; }
+
+            const folders = Array.from(checked).map(cb => decodeURIComponent(cb.value));
+
+            showResultModal(
+                `确定要把选中的 ${folders.length} 个残留文件夹移入回收站吗？\n\n` +
+                `📁 涉及目录：\n` +
+                folders.slice(0, 5).map(f => '· ' + f.split('\\').pop()).join('\n') +
+                (folders.length > 5 ? `\n... 还有 ${folders.length - 5} 个` : '') +
+                `\n\n💡 会移到回收站，误删可恢复。`,
+                async () => {
+                    this.textContent = '正在清理...'; this.disabled = true;
+                    try {
+                        const res = await pywebview.api.delete_residue_folders(folders);
+                        if (res.freed > 0) { showTrashAnimation(folders.length); playSound('success'); }
+                        showResultModal(`✅ 清理完成！\n\n已移入回收站：${res.deleted} 个文件夹\n释放空间：${formatSize(res.freed)}${res.errors > 0 ? `\n失败：${res.errors} 个（可能被占用）` : ''}`);
+                        document.getElementById('residueScanBtn').click();
+                    } catch (e) {
+                        showResultModal('删除出错：' + e);
+                    } finally {
+                        this.textContent = '移入回收站'; this.disabled = false;
+                    }
+                }
+            );
+        });
+
+        // ============ 粉碎机 ============
+        async function shredPickFiles() {
+            const res = await pywebview.api.pick_files_for_shred();
+            if (!res.ok) return;
+            for (const f of res.files) {
+                await shredAddPath(f);
+            }
+            renderShredList();
+        }
+
+        async function shredPickFolder() {
+            const res = await pywebview.api.pick_folder();
+            if (!res.ok) return;
+            await shredAddPath(res.path);
+            renderShredList();
+        }
+
+        async function shredAddPath(path) {
+            // 检查是否已在列表中
+            if (shredList.some(x => x.path === path)) return;
+            const info = await pywebview.api.calc_shred_size([path]);
+            const name = path.split('\\').pop() || path;
+            const isDir = !path.match(/\.[a-zA-Z0-9]{1,6}$/);
+            shredList.push({
+                path: path,
+                name: name,
+                size: info.size,
+                count: info.count,
+                isDir: isDir,
+                rejected: info.rejected
+            });
+        }
+
+        function renderShredList() {
+            const box = document.getElementById('shredListBox');
+            const body = document.getElementById('shredListBody');
+
+            if (shredList.length === 0) {
+                box.style.display = 'none';
+                document.getElementById('shredStartBtn').style.display = 'none';
+                return;
+            }
+
+            box.style.display = 'block';
+            document.getElementById('shredStartBtn').style.display = 'inline-block';
+
+            const totalSize = shredList.reduce((s, x) => s + x.size, 0);
+            document.getElementById('shredListCount').textContent = shredList.length;
+            document.getElementById('shredListSize').textContent = formatSize(totalSize);
+
+            body.innerHTML = shredList.map((item, i) => {
+                const icon = item.isDir ? '📁' : '📄';
+                const sizeText = item.isDir ? `${formatSize(item.size)} (${item.count} 个文件)` : formatSize(item.size);
+                let rejectedHtml = '';
+                if (item.rejected && item.rejected.length > 0) {
+                    rejectedHtml = `<div style="font-size: 10px; color: #ff6b70; margin-top: 2px;">⚠️ ${item.rejected.length} 个文件被系统保护跳过</div>`;
+                }
+                return `
+                <div class="shred-item">
+                    <span class="si-icon">${icon}</span>
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="si-name" title="${item.path}">${item.name}</div>
+                        <div class="si-path">${item.path}</div>
+                        ${rejectedHtml}
+                    </div>
+                    <span class="si-size">${sizeText}</span>
+                    <span class="si-remove" onclick="shredRemoveItem(${i})" title="从列表移除">×</span>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function shredRemoveItem(i) {
+            shredList.splice(i, 1);
+            renderShredList();
+        }
+
+        function shredClearList() {
+            showResultModal('确定要清空待粉碎清单吗？', () => {
+                shredList = [];
+                renderShredList();
+            });
+        }
+
+        document.getElementById('shredStartBtn').addEventListener('click', async function() {
+            if (shredList.length === 0) {
+                showResultModal('待粉碎清单是空的，请先添加文件');
+                return;
+            }
+            const passes = parseInt(document.getElementById('shredPasses').value);
+            const totalSize = shredList.reduce((s, x) => s + x.size, 0);
+            const totalCount = shredList.reduce((s, x) => s + (x.count || 1), 0);
+
+            // 危险提示：二次确认
+            const confirmMsg =
+                `⚠️ 危险操作！请再确认一次\n\n` +
+                `即将粉碎：\n` +
+                `· ${shredList.length} 项（共 ${totalCount} 个文件）\n` +
+                `· 总计 ${formatSize(totalSize)}\n` +
+                `· 覆写 ${passes} 次\n\n` +
+                `❗ 粉碎后无法通过任何方式恢复！\n` +
+                `❗ 不要用于清理普通垃圾（用一键清理就好）\n\n` +
+                `确认这些文件你【绝对不需要】了？`;
+
+            showResultModal(confirmMsg, async () => {
+                // 再弹一次最终确认
+                setTimeout(async () => {
+                    if (!confirm('最后确认：真的要粉碎这些文件吗？此操作不可撤销！')) return;
+
+                    const paths = shredList.map(x => x.path);
+
+                    document.getElementById('shredProgressBox').classList.add('active');
+                    document.getElementById('shredStartBtn').style.display = 'none';
+                    document.getElementById('shredCancelBtn').style.display = 'inline-block';
+                    document.getElementById('shredStatus').textContent = '';
+
+                    const startRes = await pywebview.api.start_shred(paths, passes);
+                    if (!startRes.ok) {
+                        showResultModal(startRes.msg);
+                        document.getElementById('shredProgressBox').classList.remove('active');
+                        document.getElementById('shredStartBtn').style.display = 'inline-block';
+                        document.getElementById('shredCancelBtn').style.display = 'none';
+                        return;
+                    }
+
+                    if (shredPolling) clearInterval(shredPolling);
+                    shredPolling = setInterval(async () => {
+                        const st = await pywebview.api.get_shred_status();
+
+                        const totalBytes = Math.max(1, st.total_bytes);
+                        const pct = Math.min(100, Math.floor(st.done_bytes / totalBytes * 100));
+
+                        document.getElementById('shredProgressPct').textContent = pct + '%';
+                        document.getElementById('shredProgressBar').style.width = pct + '%';
+                        document.getElementById('shredProgressFiles').textContent =
+                            `${st.done_files} / ${st.total_files} 个文件`;
+                        document.getElementById('shredProgressBytes').textContent =
+                            `${formatSize(st.done_bytes)} / ${formatSize(st.total_bytes)}`;
+
+                        if (st.current) {
+                            document.getElementById('shredProgressFile').textContent = '🔥 ' + st.current;
+                        }
+
+                        if (st.done) {
+                            clearInterval(shredPolling);
+                            shredPolling = null;
+
+                            document.getElementById('shredProgressBox').classList.remove('active');
+                            document.getElementById('shredStartBtn').style.display = 'inline-block';
+                            document.getElementById('shredCancelBtn').style.display = 'none';
+
+                            // 清空列表
+                            shredList = [];
+                            renderShredList();
+
+                            if (st.error) {
+                                showResultModal('粉碎出错：' + st.error);
+                                return;
+                            }
+
+                            let msg = `🔥 粉碎完成！\n\n成功粉碎：${st.success} 个文件\n`;
+                            if (st.failed && st.failed.length > 0) {
+                                msg += `\n失败 ${st.failed.length} 个：\n`;
+                                msg += st.failed.slice(0, 5).join('\n');
+                                if (st.failed.length > 5) msg += `\n...还有 ${st.failed.length - 5} 个`;
+                            }
+                            msg += `\n\n⚠️ 这些文件已永久删除，无法恢复。`;
+
+                            playSound('success');
+                            showResultModal(msg);
+                            document.getElementById('shredStatus').textContent = `上次粉碎了 ${st.success} 个文件，释放 ${formatSize(st.done_bytes)}`;
+                        }
+                    }, 400);
+                }, 100);
+            });
+        });
+
+        document.getElementById('shredCancelBtn').addEventListener('click', async () => {
+            await pywebview.api.cancel_shred();
+            document.getElementById('shredStatus').textContent = '正在取消...';
+        });
+
+        // ============ 聊天软件 ============
+        document.getElementById('chatScanBtn').addEventListener('click', async function() {
+            this.textContent = '检测中...'; this.disabled = true;
+            document.getElementById('chatStatus').textContent = '正在查找微信和 QQ 目录...';
+            document.getElementById('chatList').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-title">正在检测</div></div>';
+            try {
+                chatData = await pywebview.api.detect_chat_apps();
+                chatScanCache = {};
+                renderChatAccounts();
+            } catch (e) {
+                document.getElementById('chatStatus').textContent = '检测失败：' + e;
+            } finally {
+                this.textContent = '🔍 重新检测';
+                this.disabled = false;
+            }
+        });
+
+        function renderChatAccounts() {
+            const listBox = document.getElementById('chatList');
+            const allAccounts = [...(chatData.wechat || []).map(a => ({...a, app: 'wechat'})), ...(chatData.qq || []).map(a => ({...a, app: 'qq'}))];
+            if (allAccounts.length === 0) {
+                listBox.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">没有检测到微信或 QQ</div><div class="empty-state-desc">可能没装，或者装在非常规位置</div></div>`;
+                document.getElementById('chatCleanBtn').style.display = 'none';
+                document.getElementById('chatStatus').textContent = '';
+                return;
+            }
+            listBox.innerHTML = allAccounts.map((acc, i) => {
+                const isWechat = acc.app === 'wechat';
+                const icon = isWechat ? '💬' : '🐧';
+                const appName = isWechat ? `微信 ${acc.version}` : 'QQ';
+                return `
+                <div class="chat-account-card" data-account="${encodeURIComponent(acc.path)}" data-app="${acc.app}" style="animation-delay: ${i * 0.08}s">
+                    <div class="chat-account-header">
+                        <div class="chat-account-icon ${acc.app}">${icon}</div>
+                        <div class="chat-account-info">
+                            <div class="chat-account-name">${appName} · ${acc.account}</div>
+                            <div class="chat-account-path" title="${acc.path}">${acc.path}</div>
+                        </div>
+                        <div class="chat-account-total" id="accountTotal-${i}">--</div>
+                    </div>
+                    <div class="chat-category-list" id="accountCategories-${i}"><div style="color: var(--muted); font-size: 12px; padding: 10px;">点击「扫描」查看各项占用</div></div>
+                    <div style="margin-top: 12px; display: flex; gap: 10px;">
+                        <button class="open-btn" onclick="scanChatAccount(${i})">🔍 扫描</button>
+                        <button class="open-btn" onclick="openChatFolder('${acc.path.replace(/\\/g, '\\\\')}')">📂 打开目录</button>
+                    </div>
+                </div>`;
+            }).join('');
+            document.getElementById('chatCleanBtn').style.display = 'none';
+            document.getElementById('chatStatus').textContent = `检测到 ${allAccounts.length} 个账号，点击「扫描」查看可清理内容`;
+        }
+
+        async function scanChatAccount(index) {
+            const cards = document.querySelectorAll('.chat-account-card');
+            const card = cards[index];
+            if (!card) return;
+            const path = decodeURIComponent(card.dataset.account);
+            const app = card.dataset.app;
+            const container = document.getElementById(`accountCategories-${index}`);
+            const totalEl = document.getElementById(`accountTotal-${index}`);
+            container.innerHTML = '<div style="color: var(--muted); font-size: 12px; padding: 10px;">正在扫描...</div>';
+            try {
+                const categories = await pywebview.api.scan_chat_account(path, app);
+                chatScanCache[index] = { path, app, categories };
+                if (categories.length === 0) {
+                    container.innerHTML = '<div style="color: var(--muted); font-size: 12px; padding: 10px;">没有找到可清理的缓存目录</div>';
+                    totalEl.textContent = '0 B';
+                    return;
+                }
+                const totalSize = categories.reduce((s, c) => s + c.size, 0);
+                totalEl.textContent = formatSize(totalSize);
+                const icons = {"Image": "🖼", "Video": "🎬", "File": "📄", "Voice": "🎤", "Cache": "🗑", "Favorite": "⭐", "Fav": "⭐", "FileRecv": "📥", "Audio": "🎵", "Photo": "📷", "FileShare": "📤", "Thumb": "🖼", "Screen": "🖥"};
+                container.innerHTML = categories.map((c, ci) => {
+                    const icon = icons[c.category] || "📁";
+                    return `
+                    <div class="chat-category">
+                        <input type="checkbox" class="chat-cb" data-index="${index}" data-cat="${ci}">
+                        <span class="cc-icon">${icon}</span>
+                        <div class="cc-info">
+                            <div class="cc-label">${c.label}</div>
+                            <div class="cc-sub">点击勾选后点底部「移入回收站」</div>
+                        </div>
+                        <span class="cc-size">${formatSize(c.size)}</span>
+                    </div>`;
+                }).join('');
+                document.getElementById('chatCleanBtn').style.display = 'inline-block';
+                document.getElementById('chatStatus').textContent = '勾选要清理的分类，然后点「移入回收站」';
+            } catch (e) {
+                container.innerHTML = `<div style="color: var(--danger); font-size: 12px; padding: 10px;">扫描失败：${e}</div>`;
+            }
+        }
+
+        function openChatFolder(path) { pywebview.api.open_folder(path); }
+
+        document.getElementById('chatCleanBtn').addEventListener('click', async function() {
+            const checked = Array.from(document.querySelectorAll('.chat-cb:checked'));
+            if (checked.length === 0) { showResultModal('请先勾选要清理的分类'); return; }
+            const minAge = parseInt(document.getElementById('chatTimeFilter').value);
+            const groups = {};
+            let totalEstimated = 0;
+            checked.forEach(cb => {
+                const idx = parseInt(cb.dataset.index);
+                const catIdx = parseInt(cb.dataset.cat);
+                const cache = chatScanCache[idx];
+                if (!cache) return;
+                const cat = cache.categories[catIdx];
+                if (!cat) return;
+                const key = `${idx}-${catIdx}`;
+                groups[key] = { paths: cat.paths || [cat.path], label: cat.label, size: cat.size };
+                totalEstimated += cat.size;
+            });
+            let timeDesc = minAge >= 365 ? '一年' : (minAge >= 180 ? '半年' : (minAge >= 90 ? '90天' : (minAge >= 30 ? '30天' : `${minAge}天`)));
+            showResultModal(
+                `确定要清理以下分类中 ${timeDesc} 以前的文件吗？\n\n⚠️ 只清图片/视频/语音/文件缓存\n✅ 聊天记录（.db）绝对不会动\n💡 文件会被移入回收站，可恢复\n\n共勾选 ${checked.length} 个分类（约 ${formatSize(totalEstimated)}）`,
+                async () => {
+                    this.textContent = '正在清理...'; this.disabled = true;
+                    document.getElementById('chatStatus').textContent = '正在移入回收站...';
+                    let totalFreed = 0, totalDeleted = 0, totalSkipped = 0;
+                    try {
+                        for (const key in groups) {
+                            const g = groups[key];
+                            const res = await pywebview.api.clean_chat_category(g.paths, minAge, false);
+                            totalFreed += res.freed || 0;
+                            totalDeleted += res.deleted || 0;
+                            totalSkipped += res.skippedDanger || 0;
+                        }
+                        if (totalFreed > 0) { showTrashAnimation(1); playSound('success'); }
+                        let msg = `🎉 清理完成！\n\n释放空间：${formatSize(totalFreed)}\n移入回收站：${totalDeleted} 个文件\n`;
+                        if (totalSkipped > 0) msg += `\n🛡 安全保护：${totalSkipped} 个危险文件被跳过（聊天记录数据库）`;
+                        msg += `\n\n💡 去回收站看看，确认无误后可以清空回收站。`;
+                        showResultModal(msg);
+                        document.getElementById('chatStatus').textContent = `上次清理释放了 ${formatSize(totalFreed)}`;
+                        const indices = new Set();
+                        checked.forEach(cb => indices.add(parseInt(cb.dataset.index)));
+                        for (const idx of indices) await scanChatAccount(idx);
+                    } catch (e) {
+                        showResultModal('清理出错：' + e);
+                    } finally {
+                        this.textContent = '移入回收站'; this.disabled = false;
+                    }
+                }
+            );
+        });
+
+        function makeBar(percent, textHtml) {
+            let cls = '';
+            if (percent > 85) cls = 'danger';
+            else if (percent > 70) cls = 'warn';
+            const pct = Math.max(0, Math.min(100, percent));
+            return `<div class="bar-row"><div class="bar-track"><div class="bar-fill ${cls}" style="width: ${pct}%"></div></div><div class="bar-text">${textHtml}</div></div>`;
+        }
+
+        async function loadSystemInfoOnly() {
+            try {
+                const info = await pywebview.api.get_system_info();
+                renderSystemInfo(info);
+            } catch (e) {}
+        }
+
+        function renderSystemInfo(info) {
+            const box = document.getElementById('systemInfoBox');
+            const rows = [];
+            rows.push(`<div class="info-item"><span class="info-label">🖥 操作系统</span><span class="info-value" title="${info.os}">${info.os}</span></div>`);
+            rows.push(`<div class="info-item"><span class="info-label">⚙️ 处理器</span><span class="info-value" title="${info.cpu}">${info.cpu}</span></div>`);
+            rows.push(`<div class="info-item"><span class="info-label">🧩 CPU 核心</span><span class="info-value">${info.cpu_cores} 核</span></div>`);
+            rows.push(`<div class="info-item"><span class="info-label">🔥 CPU 使用率</span>${makeBar(info.cpu_percent, `<span class="pct">${info.cpu_percent.toFixed(1)}%</span>`)}</div>`);
+            rows.push(`<div class="info-item"><span class="info-label">🧠 内存</span>${makeBar(info.mem_percent, `<span class="pct">${info.mem_percent.toFixed(1)}%</span><span class="sub">${info.mem_used_gb} / ${info.mem_total_gb} GB</span>`)}</div>`);
+            rows.push(`<div class="info-item"><span class="info-label">💾 C 盘</span>${makeBar(info.disk_percent, `<span class="pct">${info.disk_percent.toFixed(1)}%</span><span class="sub">${info.disk_used_gb} / ${info.disk_total_gb} GB</span>`)}</div>`);
+            if (info.battery && info.battery.present) {
+                const icon = info.battery.plugged ? '🔌' : '🔋';
+                const state = info.battery.plugged ? '已插电' : '使用电池';
+                rows.push(`<div class="info-item"><span class="info-label">${icon} 电池</span>${makeBar(info.battery.percent, `<span class="pct">${info.battery.percent}%</span><span class="sub">${state}</span>`)}</div>`);
+            } else {
+                rows.push(`<div class="info-item"><span class="info-label">🔋 电池</span><span class="info-value" style="color:var(--muted);">未检测到（台式机）</span></div>`);
+            }
+            box.innerHTML = rows.join('');
+        }
+
+        async function loadCleanHistory() {
+            try {
+                const h = await pywebview.api.get_clean_history();
+                document.getElementById('statMonthFreed').textContent = h.month_freed_str;
+                document.getElementById('statTotalFreed').textContent = h.total_freed_str;
+                document.getElementById('statTotalCount').textContent = h.total_count + ' 次';
+                const listBox = document.getElementById('historyList');
+                if (h.recent.length === 0) {
+                    listBox.innerHTML = '<div style="padding:20px; text-align:center; color:var(--muted); font-size:12px;">暂无清理记录，去清理一次吧</div>';
+                } else {
+                    listBox.innerHTML = h.recent.map(r => `<div class="history-item"><span class="h-time">${r.time_str}</span><span class="h-freed">释放 ${r.freed_str}</span></div>`).join('');
+                }
+            } catch (e) {}
+        }
+
+        async function refreshSystemInfo() {
+            await loadSystemInfoOnly();
+            await loadCleanHistory();
+        }
+
+        async function setShutdown() {
+            const minutes = parseInt(document.getElementById('shutdownMinutes').value);
+            showResultModal(`确定要在 ${minutes} 分钟后自动关机吗？\n\n你随时可以点击「取消关机」。`, async () => {
+                const res = await pywebview.api.set_shutdown_timer(minutes);
+                if (res.ok) loadShutdownStatus();
+                else showResultModal('设置失败：' + res.msg);
+            });
+        }
+
+        async function cancelShutdown() {
+            const res = await pywebview.api.cancel_shutdown();
+            if (res.ok) {
+                document.getElementById('shutdownStatus').style.display = 'none';
+                if (shutdownTimer) { clearInterval(shutdownTimer); shutdownTimer = null; }
+            }
+        }
+
+        async function loadShutdownStatus() {
+            try {
+                const st = await pywebview.api.get_shutdown_status();
+                const box = document.getElementById('shutdownStatus');
+                if (shutdownTimer) { clearInterval(shutdownTimer); shutdownTimer = null; }
+                if (st.active && st.remaining > 0) {
+                    box.style.display = 'block';
+                    updateShutdownCountdown(st.remaining);
+                    shutdownTimer = setInterval(async () => {
+                        const s = await pywebview.api.get_shutdown_status();
+                        if (s.active && s.remaining > 0) updateShutdownCountdown(s.remaining);
+                        else { box.style.display = 'none'; if (shutdownTimer) { clearInterval(shutdownTimer); shutdownTimer = null; } }
+                    }, 1000);
+                } else box.style.display = 'none';
+            } catch (e) {}
+        }
+
+        function updateShutdownCountdown(secs) {
+            const h = Math.floor(secs / 3600);
+            const m = Math.floor((secs % 3600) / 60);
+            const s = secs % 60;
+            const txt = h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            const el = document.getElementById('shutdownCountdown');
+            if (el) el.textContent = txt;
+        }
+
+        function hourOptions() {
+            let opts = '';
+            for (let i = 0; i < 24; i++) opts += `<option value="${i}">${String(i).padStart(2, '0')}:00</option>`;
+            return opts;
+        }
+
+        async function loadSettings() {
+            const s = await pywebview.api.get_settings();
+            currentWhitelist = s.whitelist || [];
+            soundEnabled = s.sound !== false;
+            for (const w of currentWhitelist) {
+                if (!processFriendlyCache[w.toLowerCase()]) {
+                    try { processFriendlyCache[w.toLowerCase()] = await pywebview.api.get_friendly_name(w); }
+                    catch (e) { processFriendlyCache[w.toLowerCase()] = w; }
+                }
+            }
+            renderWhitelist();
+            document.getElementById('autoCleanEnabled').checked = s.auto_clean.enabled;
+            document.getElementById('autoCleanInterval').value = s.auto_clean.interval_hours;
+            document.getElementById('soundSwitch').checked = soundEnabled;
+            document.getElementById('themeSelect').value = currentTheme;
+            document.getElementById('traySwitch').checked = s.minimize_to_tray !== false;
+            const startSel = document.getElementById('autoCleanStartHour');
+            const endSel = document.getElementById('autoCleanEndHour');
+            if (startSel.options.length === 0) {
+                startSel.innerHTML = hourOptions();
+                endSel.innerHTML = hourOptions();
+            }
+            startSel.value = s.auto_clean.start_hour;
+            endSel.value = s.auto_clean.end_hour;
+            updateTimeHint();
+            document.getElementById('lastCleanTime').textContent = s.last_clean_str;
+            loadProcessList();
+        }
+
+        document.getElementById('themeSelect').addEventListener('change', async function() {
+            applyTheme(this.value);
+            try { await pywebview.api.save_theme(this.value); } catch (e) {}
+        });
+
+        document.getElementById('soundSwitch').addEventListener('change', async function() {
+            soundEnabled = this.checked;
+            document.getElementById('soundBtn').textContent = soundEnabled ? '🔊' : '🔇';
+            try { await pywebview.api.save_sound(soundEnabled); } catch (e) {}
+            if (soundEnabled) playSound('notify');
+        });
+
+        document.getElementById('traySwitch').addEventListener('change', async function() {
+            try { await pywebview.api.save_minimize_to_tray(this.checked); } catch (e) {}
+        });
+
+        function updateTimeHint() {
+            const s = parseInt(document.getElementById('autoCleanStartHour').value);
+            const e = parseInt(document.getElementById('autoCleanEndHour').value);
+            const hint = document.getElementById('timeWindowHint');
+            if (s === e) hint.innerHTML = '<span class="time-badge">⚠ 全天任意时段</span>';
+            else if (s < e) hint.innerHTML = `<span class="time-badge">✅ 每天 ${String(s).padStart(2,'0')}:00 ~ ${String(e).padStart(2,'0')}:00</span>`;
+            else hint.innerHTML = `<span class="time-badge">✅ 每天 ${String(s).padStart(2,'0')}:00 到次日 ${String(e).padStart(2,'0')}:00（跨夜）</span>`;
+        }
+
+        document.getElementById('autoCleanStartHour').addEventListener('change', updateTimeHint);
+        document.getElementById('autoCleanEndHour').addEventListener('change', updateTimeHint);
+
+        async function loadProcessList() {
+            const picker = document.getElementById('procPicker');
+            picker.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted); font-size: 13px;">正在加载进程列表...</div>';
+            try {
+                allProcesses = await pywebview.api.get_running_processes();
+                renderProcessList();
+            } catch (e) {
+                picker.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--danger); font-size: 13px;">加载失败：' + e + '</div>';
+            }
+        }
+
+        function renderProcessList() {
+            const picker = document.getElementById('procPicker');
+            const query = (document.getElementById('procSearchInput').value || '').toLowerCase().trim();
+            let list = allProcesses;
+            if (query) list = allProcesses.filter(p => p.display.toLowerCase().includes(query) || p.name.toLowerCase().includes(query));
+            if (list.length === 0) {
+                picker.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted); font-size: 13px;">没有找到匹配的程序</div>';
+                return;
+            }
+            const display = list.slice(0, 80);
+            picker.innerHTML = display.map(p => {
+                const isSelected = currentWhitelist.includes(p.name);
+                const sysTag = p.is_system ? '<span class="p-system">[系统关键]</span>' : '';
+                return `
+                    <div class="proc-item ${isSelected ? 'selected' : ''}" onclick="toggleProcess('${p.name}')">
+                        <div>
+                            <div class="p-name">${p.display}${sysTag}</div>
+                            <div class="p-raw">${p.name}</div>
+                        </div>
+                        <div class="p-status">${isSelected ? '✅ 已添加' : '➕ 添加'}</div>
+                    </div>
+                `;
+            }).join('');
+            if (list.length > 80) picker.innerHTML += `<div style="padding: 12px; text-align: center; color: var(--muted); font-size: 12px;">还有 ${list.length - 80} 个程序，请输入关键词搜索</div>`;
+        }
+
+        function toggleProcess(procName) {
+            const idx = currentWhitelist.indexOf(procName);
+            if (idx >= 0) currentWhitelist.splice(idx, 1);
+            else currentWhitelist.push(procName);
+            renderWhitelist();
+            renderProcessList();
+        }
+
+        function renderWhitelist() {
+            const box = document.getElementById('whitelistBox');
+            if (currentWhitelist.length === 0) {
+                box.innerHTML = '<span style="color: var(--muted); font-size: 13px;">暂无白名单，从下方列表中点击添加</span>';
+                return;
+            }
+            box.innerHTML = currentWhitelist.map((w, i) => {
+                const friendly = processFriendlyCache[w.toLowerCase()] || w;
+                return `<span class="whitelist-tag"><span class="friendly">${friendly}</span><span class="raw">${w}</span><span class="close" onclick="removeWhitelist(${i})">×</span></span>`;
+            }).join('');
+        }
+
+        function removeWhitelist(i) {
+            currentWhitelist.splice(i, 1);
+            renderWhitelist();
+            renderProcessList();
+        }
+
+        document.getElementById('procSearchInput').addEventListener('input', renderProcessList);
+
+        async function saveWhitelist() {
+            await pywebview.api.save_whitelist(currentWhitelist);
+            showResultModal('✅ 白名单已保存！\n\n以后这些程序占用的文件会被自动跳过。');
+        }
+
+        async function saveAutoClean() {
+            const enabled = document.getElementById('autoCleanEnabled').checked;
+            const interval = document.getElementById('autoCleanInterval').value;
+            const startHour = document.getElementById('autoCleanStartHour').value;
+            const endHour = document.getElementById('autoCleanEndHour').value;
+            await pywebview.api.save_auto_clean(enabled, interval, startHour, endHour);
+            let timeDesc = '';
+            if (startHour === endHour) timeDesc = '全天任意时段';
+            else if (parseInt(startHour) < parseInt(endHour)) timeDesc = `${startHour}点 ~ ${endHour}点`;
+            else timeDesc = `${startHour}点 ~ 次日${endHour}点`;
+            showResultModal('✅ 自动清理设置已保存！\n\n' + (enabled ? `已开启：每 ${interval} 小时，在 ${timeDesc} 检查并自动清理。` : '已关闭自动清理。'));
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+{
+  "rules": [
+    {
+      "id": "user_temp",
+      "name": "系统和软件产生的临时垃圾",
+      "paths": ["%TEMP%"],
+      "minAgeHours": 1
+    },
+    {
+      "id": "win_temp",
+      "name": "Windows系统运行产生的临时垃圾",
+      "paths": ["C:\\Windows\\Temp"],
+      "minAgeHours": 1
+    },
+    {
+      "id": "chrome_cache",
+      "name": "Chrome浏览器上网缓存",
+      "paths": ["%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Cache"],
+      "minAgeHours": 0
+    },
+    {
+      "id": "edge_cache",
+      "name": "Edge浏览器上网缓存",
+      "paths": ["%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Cache"],
+      "minAgeHours": 0
+    },
+    {
+      "id": "nvidia_cache",
+      "name": "NVIDIA显卡渲染缓存（游戏/画图残留）",
+      "paths": ["%LOCALAPPDATA%\\NVIDIA\\DXCache"],
+      "minAgeHours": 0
+    },
+    {
+      "id": "recycle_bin",
+      "name": "回收站里的垃圾",
+      "paths": ["C:\\$Recycle.Bin"],
+      "minAgeHours": 0,
+      "requiresAdmin": true,
+      "command": "powershell -Command \"Clear-RecycleBin -Force\""
+    },
+    {
+      "id": "windows_update",
+      "name": "Windows更新缓存（系统更新残留）",
+      "paths": ["C:\\Windows\\SoftwareDistribution\\Download"],
+      "minAgeHours": 0,
+      "requiresAdmin": true,
+      "command": "net stop wuauserv & net stop bits & del /q /s \"C:\\Windows\\SoftwareDistribution\\Download\\*\" & net start wuauserv & net start bits"
+    }
+  ]
+}
