@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# IDE
+.idea/
+.vscode/
+
+# 用户数据（不上传私人配置）
+settings.json
+history.json
+
+# 系统
+.DS_Store
+Thumbs.db
