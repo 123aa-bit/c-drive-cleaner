@@ -1,0 +1,5 @@
+pywebview>=4.4
+psutil>=5.9
+send2trash>=1.8
+pystray>=0.19
+pillow>=10.0
